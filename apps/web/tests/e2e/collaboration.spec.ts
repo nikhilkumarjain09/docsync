@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 
 // Helper to generate unique emails so tests are completely isolated and idempotent
 function generateTestEmail(role: string) {
@@ -6,7 +6,7 @@ function generateTestEmail(role: string) {
 }
 
 // Extract editor text excluding cursor carets/tooltips that pollute innerText
-async function getCleanEditorText(page: any): Promise<string> {
+async function getCleanEditorText(page: Page): Promise<string> {
   return page.evaluate(() => {
     const editorEl = document.querySelector('.ProseMirror') as HTMLElement;
     if (!editorEl) return '';
@@ -19,7 +19,7 @@ async function getCleanEditorText(page: any): Promise<string> {
 }
 
 // Robust helper to register a new user and ensure they are authenticated
-async function signupAndLogin(page: any, name: string, email: string) {
+async function signupAndLogin(page: Page, name: string, email: string) {
   // 1. Fill signup form
   await page.goto('/signup');
   await page.fill('#name', name);
@@ -38,18 +38,17 @@ async function signupAndLogin(page: any, name: string, email: string) {
     await page.fill('#email', email);
     await page.fill('#password', 'password123');
     await page.click('button[type="submit"]');
-    
+
     // Wait for session update and force navigate
     await page.waitForTimeout(2000);
     await page.goto('/');
   }
 
-  // 4. Wait for the "Create Document" button to be visible to ensure dashboard loaded completely
-  await page.waitForSelector('button:has-text("Create Document")', { timeout: 15000 });
+  // 4. Wait for the "Create new document" button to be visible to ensure dashboard loaded completely
+  await page.waitForSelector('button:has-text("Create new document")', { timeout: 15000 });
 }
 
 test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
-  
   test.beforeEach(async ({ page }) => {
     // Mock the AI API routes so that the suite is fully runnable in CI without live keys
     await page.route('**/api/ai/summarize', async (route) => {
@@ -86,7 +85,9 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
   // ─────────────────────────────────────────────────────────────────────────────
   // 1. Two browser contexts collaboration + offline reconnect merge
   // ─────────────────────────────────────────────────────────────────────────────
-  test('Two browser contexts edit same doc concurrently, disconnect, edit offline, and merge successfully on reconnect', async ({ browser }) => {
+  test('Two browser contexts edit same doc concurrently, disconnect, edit offline, and merge successfully on reconnect', async ({
+    browser,
+  }) => {
     const ownerEmail = generateTestEmail('owner');
     const editorEmail = generateTestEmail('editor');
 
@@ -97,8 +98,11 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
     await signupAndLogin(page1, 'Document Owner', ownerEmail);
 
     // Create a new document on the dashboard
-    await page1.click('button:has-text("Create Document")');
-    await page1.fill('[placeholder="e.g. Q3 Roadmap Proposal"]', 'E2E Sync Document');
+    await page1.click('button:has-text("Create new document")');
+    await page1.fill(
+      '[placeholder="e.g. Q3 Roadmap Proposal (Leave blank for Untitled)"]',
+      'E2E Sync Document',
+    );
     await page1.click('button[type="submit"]:has-text("Create & Open")');
     await page1.waitForURL('**/documents/*');
     const docUrl = page1.url();
@@ -117,11 +121,17 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
     await signupAndLogin(page2, 'Document Editor', editorEmail);
 
     // 2. Now from Owner context (page1), send the invitation
-    await page1.click('button[role="tab"]:has-text("Sharing")');
-    await page1.fill('[placeholder="collaborator@domain.com"]', editorEmail);
+    await page1.click('[data-testid="share-document-btn"]');
+    await page1.waitForSelector('[placeholder="Enter email address"]');
+    await page1.fill('[placeholder="Enter email address"]', editorEmail);
     await page1.selectOption('select', 'EDITOR');
-    await page1.click('button:has-text("Invite")');
+    await page1.click('button[type="submit"]:has-text("Invite")');
     await page1.waitForTimeout(1000); // Wait for API response to propagate
+    // Close the share dialog so it doesn't block subsequent editor clicks
+    await page1.keyboard.press('Escape');
+    await page1
+      .waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 5000 })
+      .catch(() => {});
 
     // Navigate to the shared document url
     await page2.goto(docUrl);
@@ -137,14 +147,18 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
     await page1.keyboard.type('Owner Online Edit. ');
 
     // Wait for text to synchronize to Editor
-    await expect.poll(async () => getCleanEditorText(page2), { timeout: 15000 }).toContain('Owner Online Edit.');
+    await expect
+      .poll(async () => getCleanEditorText(page2), { timeout: 15000 })
+      .toContain('Owner Online Edit.');
 
     await page2.locator('.ProseMirror').click();
     await page2.keyboard.press('Control+End');
     await page2.keyboard.type('Editor Online Edit. ');
 
     // Wait for sync to Owner
-    await expect.poll(async () => getCleanEditorText(page1), { timeout: 15000 }).toContain('Editor Online Edit.');
+    await expect
+      .poll(async () => getCleanEditorText(page1), { timeout: 15000 })
+      .toContain('Editor Online Edit.');
 
     // Go offline on both contexts
     await context1.setOffline(true);
@@ -164,10 +178,18 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
     await context2.setOffline(false);
 
     // Assert: Document contents merge and eventually display both edits
-    await expect.poll(async () => getCleanEditorText(page1), { timeout: 15000 }).toContain('Owner Offline Change.');
-    await expect.poll(async () => getCleanEditorText(page1), { timeout: 15000 }).toContain('Editor Offline Change.');
-    await expect.poll(async () => getCleanEditorText(page2), { timeout: 15000 }).toContain('Owner Offline Change.');
-    await expect.poll(async () => getCleanEditorText(page2), { timeout: 15000 }).toContain('Editor Offline Change.');
+    await expect
+      .poll(async () => getCleanEditorText(page1), { timeout: 15000 })
+      .toContain('Owner Offline Change.');
+    await expect
+      .poll(async () => getCleanEditorText(page1), { timeout: 15000 })
+      .toContain('Editor Offline Change.');
+    await expect
+      .poll(async () => getCleanEditorText(page2), { timeout: 15000 })
+      .toContain('Owner Offline Change.');
+    await expect
+      .poll(async () => getCleanEditorText(page2), { timeout: 15000 })
+      .toContain('Editor Offline Change.');
 
     await context1.close();
     await context2.close();
@@ -176,7 +198,9 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
   // ─────────────────────────────────────────────────────────────────────────────
   // 2. Viewer role cannot edit document
   // ─────────────────────────────────────────────────────────────────────────────
-  test('Collaborator with VIEWER role has read-only document editor canvas and cannot input text', async ({ browser }) => {
+  test('Collaborator with VIEWER role has read-only document editor canvas and cannot input text', async ({
+    browser,
+  }) => {
     const ownerEmail = generateTestEmail('owner');
     const viewerEmail = generateTestEmail('viewer');
 
@@ -185,8 +209,11 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
     page1.on('console', (msg) => console.log(`[PAGE 1 CONSOLE] ${msg.text()}`));
     await signupAndLogin(page1, 'Document Owner', ownerEmail);
 
-    await page1.click('button:has-text("Create Document")');
-    await page1.fill('[placeholder="e.g. Q3 Roadmap Proposal"]', 'E2E Viewer Doc');
+    await page1.click('button:has-text("Create new document")');
+    await page1.fill(
+      '[placeholder="e.g. Q3 Roadmap Proposal (Leave blank for Untitled)"]',
+      'E2E Viewer Doc',
+    );
     await page1.click('button[type="submit"]:has-text("Create & Open")');
     await page1.waitForURL('**/documents/*');
     const docUrl = page1.url();
@@ -204,10 +231,11 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
     await signupAndLogin(page2, 'Document Viewer', viewerEmail);
 
     // 2. Now from Owner context (page1), send the invitation
-    await page1.click('button[role="tab"]:has-text("Sharing")');
-    await page1.fill('[placeholder="collaborator@domain.com"]', viewerEmail);
+    await page1.click('[data-testid="share-document-btn"]');
+    await page1.waitForSelector('[placeholder="Enter email address"]');
+    await page1.fill('[placeholder="Enter email address"]', viewerEmail);
     await page1.selectOption('select', 'VIEWER');
-    await page1.click('button:has-text("Invite")');
+    await page1.click('button[type="submit"]:has-text("Invite")');
     await page1.waitForTimeout(1000); // Wait for API response to propagate
 
     // Open Shared Document
@@ -215,7 +243,9 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
     await page2.waitForSelector('.ProseMirror');
 
     // Check Editor is loaded
-    await expect.poll(async () => getCleanEditorText(page2), { timeout: 15000 }).toContain('Author initial text.');
+    await expect
+      .poll(async () => getCleanEditorText(page2), { timeout: 15000 })
+      .toContain('Author initial text.');
 
     // Attempt keyboard inputs
     await page2.locator('.ProseMirror').click();
@@ -236,15 +266,20 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
   // ─────────────────────────────────────────────────────────────────────────────
   // 3. Offline edit -> reload -> persists (IndexedDB durability check)
   // ─────────────────────────────────────────────────────────────────────────────
-  test('Offline edits survive page refreshes while remaining offline (IndexedDB durability)', async ({ browser }) => {
+  test('Offline edits survive page refreshes while remaining offline (IndexedDB durability)', async ({
+    browser,
+  }) => {
     const ownerEmail = generateTestEmail('owner');
 
     const context = await browser.newContext();
     const page = await context.newPage();
     await signupAndLogin(page, 'Owner', ownerEmail);
 
-    await page.click('button:has-text("Create Document")');
-    await page.fill('[placeholder="e.g. Q3 Roadmap Proposal"]', 'IndexedDB Test Doc');
+    await page.click('button:has-text("Create new document")');
+    await page.fill(
+      '[placeholder="e.g. Q3 Roadmap Proposal (Leave blank for Untitled)"]',
+      'IndexedDB Test Doc',
+    );
     await page.click('button[type="submit"]:has-text("Create & Open")');
     await page.waitForURL('**/documents/*');
     await page.waitForSelector('.ProseMirror');
@@ -262,7 +297,9 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
     await page.waitForSelector('.ProseMirror');
 
     // Assert: The edit persists (proves IndexedDB stores Yjs updates locally offline)
-    await expect.poll(async () => getCleanEditorText(page), { timeout: 15000 }).toContain('IndexedDB Offline Change.');
+    await expect
+      .poll(async () => getCleanEditorText(page), { timeout: 15000 })
+      .toContain('IndexedDB Offline Change.');
 
     await context.close();
   });
@@ -275,11 +312,15 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
 
     const context = await browser.newContext();
     const page = await context.newPage();
+    page.on('console', (msg) => console.log(`[RESTORE TEST CONSOLE] ${msg.text()}`));
     await signupAndLogin(page, 'Version Admin', ownerEmail);
 
     // Create document
-    await page.click('button:has-text("Create Document")');
-    await page.fill('[placeholder="e.g. Q3 Roadmap Proposal"]', 'Version History Doc');
+    await page.click('button:has-text("Create new document")');
+    await page.fill(
+      '[placeholder="e.g. Q3 Roadmap Proposal (Leave blank for Untitled)"]',
+      'Version History Doc',
+    );
     await page.click('button[type="submit"]:has-text("Create & Open")');
     await page.waitForURL('**/documents/*');
     await page.waitForSelector('.ProseMirror');
@@ -290,13 +331,9 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
     await page.keyboard.type('Document Version One.');
 
     // Create Checkpoint 1
-    // Click Checkpoint button
-    // Mock the prompt dialog in Playwright to answer "V1 Snapshot"
-    page.once('dialog', async (dialog) => {
-      expect(dialog.message()).toContain('Specify a checkpoint version label');
-      await dialog.accept('V1 Snapshot');
-    });
     await page.click('button:has-text("Checkpoint")');
+    await page.fill('[placeholder="e.g. Added pricing sections"]', 'V1 Snapshot');
+    await page.click('button[type="submit"]:has-text("Create Checkpoint")');
 
     // Wait for the timeline snapshot to list
     await page.waitForSelector('text=V1 Snapshot');
@@ -305,28 +342,30 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
     await page.locator('.ProseMirror').click();
     await page.keyboard.press('Control+End');
     await page.keyboard.type(' Document Version Two.');
-    await expect.poll(async () => getCleanEditorText(page), { timeout: 15000 }).toContain('Document Version One. Document Version Two.');
+    await expect
+      .poll(async () => getCleanEditorText(page), { timeout: 15000 })
+      .toContain('Document Version One. Document Version Two.');
 
     // Create Checkpoint 2
-    page.once('dialog', async (dialog) => {
-      await dialog.accept('V2 Snapshot');
-    });
     await page.click('button:has-text("Checkpoint")');
+    await page.fill('[placeholder="e.g. Added pricing sections"]', 'V2 Snapshot');
+    await page.click('button[type="submit"]:has-text("Create Checkpoint")');
     await page.waitForSelector('text=V2 Snapshot');
 
     // Restore to V1 Snapshot
-    // Mock confirm dialog
-    page.once('dialog', async (dialog) => {
-      expect(dialog.message()).toContain('Restore to checkpoint');
-      await dialog.accept();
-    });
-    // Click "Restore" next to the V1 Snapshot block
-    const v1Block = page.locator('div:has-text("V1 Snapshot")');
-    await v1Block.locator('button:has-text("Restore")').first().click();
+    // Snapshot items are <div role="listitem">, find the one containing "V1 Snapshot"
+    const v1Item = page.locator('[role="listitem"]').filter({ hasText: 'V1 Snapshot' });
+    await v1Item.locator('button:has-text("Restore")').click();
+    // Accept confirm modal
+    await page.click('[role="alertdialog"] button:has-text("Restore")');
 
     // Assert: Document reverted to Checkpoint 1 contents
-    await expect.poll(async () => getCleanEditorText(page), { timeout: 15000 }).toContain('Document Version One.');
-    await expect.poll(async () => getCleanEditorText(page), { timeout: 15000 }).not.toContain('Document Version Two.');
+    await expect
+      .poll(async () => getCleanEditorText(page), { timeout: 15000 })
+      .toContain('Document Version One.');
+    await expect
+      .poll(async () => getCleanEditorText(page), { timeout: 15000 })
+      .not.toContain('Document Version Two.');
 
     await context.close();
   });

@@ -1,0 +1,2236 @@
+'use client';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+import { use, useState, useEffect, useRef } from 'react';
+import { useYDoc } from '@/hooks/use-ydoc';
+import { Button } from '@/components/ui/button';
+import { useSession } from 'next-auth/react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import * as Y from 'yjs';
+import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/shell/confirm-dialog';
+import { CheckpointLabelDialog } from '@/components/shell/checkpoint-label-dialog';
+import { ShareDialog } from '@/components/shell/share-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+
+// Tiptap core & Starter Kit
+import { useEditor, EditorContent } from '@tiptap/react';
+import { BubbleMenu } from '@tiptap/react/menus';
+import StarterKit from '@tiptap/starter-kit';
+import Collaboration from '@tiptap/extension-collaboration';
+import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
+
+// Tiptap Notion-Style extensions
+import Placeholder from '@tiptap/extension-placeholder';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
+import Highlight from '@tiptap/extension-highlight';
+import LinkExtension from '@tiptap/extension-link';
+import GlobalDragHandle from 'tiptap-extension-global-drag-handle';
+
+// New Tiptap extensions
+import Underline from '@tiptap/extension-underline';
+import TextAlign from '@tiptap/extension-text-align';
+import TextStyle from '@tiptap/extension-text-style';
+import Color from '@tiptap/extension-color';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
+import Image from '@tiptap/extension-image';
+
+// Custom toggle and callout blocks
+import { ToggleBlock, ToggleHeader, ToggleContent } from '@/lib/editor/toggle-block';
+import { CalloutBlock } from '@/lib/editor/callout-block';
+
+// Icons
+import {
+  ArrowLeft,
+  Users,
+  History,
+  Share2,
+  Trash2,
+  Plus,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Bold,
+  Italic,
+  Code,
+  Heading1,
+  Heading2,
+  Heading3,
+  Heading4,
+  Heading5,
+  Heading6,
+  List,
+  ListOrdered,
+  Save,
+  Menu,
+  X,
+  CheckSquare,
+  ChevronDown,
+  Quote,
+  AlertCircle,
+  Code2,
+  Minus,
+  Link as LinkIcon,
+  Sparkles,
+  ChevronRight,
+  GripVertical,
+  Wand2,
+  Search,
+  Check,
+  Ban,
+  Strikethrough,
+  Underline as UnderlineIcon,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  Table as TableIcon,
+  Image as ImageIcon,
+  FileText,
+  Info,
+  Lightbulb,
+  Smile,
+  Star,
+  MoreHorizontal,
+  Settings,
+  LogOut,
+  FileCheck,
+  Undo,
+  Eye,
+  Edit,
+  Copy,
+  Move,
+  Archive,
+  Download,
+  Printer,
+  ExternalLink,
+  Calendar,
+  Paperclip,
+  Bookmark,
+} from 'lucide-react';
+
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
+
+interface Snapshot {
+  id: string;
+  label: string | null;
+  createdAt: string;
+  creator: {
+    name: string | null;
+    email: string | null;
+  };
+}
+
+interface Collaborator {
+  userId: string;
+  role: 'OWNER' | 'EDITOR' | 'VIEWER';
+  user: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    image: string | null;
+  };
+}
+
+// User color lookup for Cursor Presence
+const colors = [
+  '#ef4444',
+  '#f97316',
+  '#f59e0b',
+  '#10b981',
+  '#06b6d4',
+  '#3b82f6',
+  '#6366f1',
+  '#8b5cf6',
+  '#a855f7',
+  '#ec4899',
+];
+function getUserColor(userId: string) {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+}
+
+export default function DocumentPage({ params }: PageProps) {
+  const { id: documentId } = use(params);
+  const router = useRouter();
+  const { data: session, status: sessionStatus } = useSession();
+
+  useEffect(() => {
+    if (sessionStatus === 'unauthenticated') {
+      router.push('/login');
+    }
+  }, [sessionStatus, router]);
+
+  if (sessionStatus === 'loading' || sessionStatus === 'unauthenticated' || !session) {
+    return (
+      <div className="from-background to-muted/30 flex min-h-screen items-center justify-center bg-radial">
+        <div className="space-y-2 text-center">
+          <div className="border-primary mx-auto h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"></div>
+          <p className="text-muted-foreground animate-pulse text-sm">
+            Entering secure workspace...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <EditorWorkspace
+      documentId={documentId}
+      userId={session.user.id}
+      userName={session.user.name || session.user.email}
+    />
+  );
+}
+
+function EditorWorkspace({
+  documentId,
+  userId,
+  userName,
+}: {
+  documentId: string;
+  userId: string;
+  userName: string;
+}) {
+  const { doc, provider, content, synced, connectionStatus, awareness, broadcastUpdate } =
+    useYDoc(documentId);
+  const router = useRouter();
+
+  if (!synced || !doc || !content || !awareness || !provider) {
+    return (
+      <div className="from-background to-muted/30 flex min-h-screen items-center justify-center bg-radial">
+        <div className="space-y-2 text-center">
+          <div className="border-primary mx-auto h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"></div>
+          <p className="text-muted-foreground animate-pulse text-sm">
+            Hydrating collaborative document...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <EditorWorkspaceContent
+      documentId={documentId}
+      userId={userId}
+      userName={userName}
+      doc={doc}
+      provider={provider}
+      content={content}
+      connectionStatus={connectionStatus}
+      awareness={awareness}
+      broadcastUpdate={broadcastUpdate}
+    />
+  );
+}
+
+function EditorWorkspaceContent({
+  documentId,
+  userId,
+  userName,
+  doc,
+  provider,
+  content,
+  connectionStatus,
+  awareness,
+  broadcastUpdate,
+}: {
+  documentId: string;
+  userId: string;
+  userName: string;
+  doc: any;
+  provider: any;
+  content: any;
+  connectionStatus: any;
+  awareness: any;
+  broadcastUpdate: any;
+}) {
+  const router = useRouter();
+
+  // Capture stable references to prevent crashes during the React unmount render pass
+  const stableDocRef = useRef(doc);
+  const stableContentRef = useRef(content);
+  const stableProviderRef = useRef(provider);
+  const stableAwarenessRef = useRef(awareness);
+
+  // eslint-disable-next-line react-hooks/refs
+  if (doc) stableDocRef.current = doc;
+  // eslint-disable-next-line react-hooks/refs
+  if (content) stableContentRef.current = content;
+  // eslint-disable-next-line react-hooks/refs
+  if (provider) stableProviderRef.current = provider;
+  // eslint-disable-next-line react-hooks/refs
+  if (awareness) stableAwarenessRef.current = awareness;
+
+  // eslint-disable-next-line react-hooks/refs
+  const stableDoc = stableDocRef.current;
+  // eslint-disable-next-line react-hooks/refs
+  const stableContent = stableContentRef.current;
+  // eslint-disable-next-line react-hooks/refs
+  const stableProvider = stableProviderRef.current;
+  // eslint-disable-next-line react-hooks/refs
+  const stableAwareness = stableAwarenessRef.current;
+
+  // Local/UI states
+  const [currentUserRole, setCurrentUserRole] = useState<'OWNER' | 'EDITOR' | 'VIEWER' | null>(
+    null,
+  );
+  const [activePeers, setActivePeers] = useState<any[]>([]);
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [previewingSnapshot, setPreviewingSnapshot] = useState<Snapshot | null>(null);
+  const [previewText, setPreviewText] = useState('');
+
+  // Tab panels
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSavingVersion, setIsSavingVersion] = useState(false);
+
+  // Document metadata state
+  const [docMetadata, setDocMetadata] = useState<{ title: string } | null>(null);
+
+  // Unified overlay states
+  const [shareOpen, setShareOpen] = useState(false);
+  const [checkpointOpen, setCheckpointOpen] = useState(false);
+  const [confirmRestoreOpen, setConfirmRestoreOpen] = useState(false);
+  const [pendingRestoreSnapshot, setPendingRestoreSnapshot] = useState<Snapshot | null>(null);
+
+  // Notion Slash Menu state
+  const [slashMenu, setSlashMenu] = useState<{
+    x: number;
+    y: number;
+    filterText: string;
+    selectionFrom: number;
+  } | null>(null);
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+
+  // Link Dialog states
+  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+
+  // AI Feature States
+  const [isAiConfigured, setIsAiConfigured] = useState(true);
+  const [aiSummary, setAiSummary] = useState('');
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [aiSearchQuery, setAiSearchQuery] = useState('');
+  const [aiSearchLoading, setAiSearchLoading] = useState(false);
+  const [aiSearchResult, setAiSearchResult] = useState<{
+    matchedSnapshotId: string | null;
+    rationale: string;
+  } | null>(null);
+
+  // Writing Assist states
+  const [showAiAssist, setShowAiAssist] = useState(false);
+  const [aiAssistInstruction, setAiAssistInstruction] = useState(
+    'improve clarity and make it more professional',
+  );
+  const [aiAssistLoading, setAiAssistLoading] = useState(false);
+  const [aiAssistResult, setAiAssistResult] = useState<{
+    originalText: string;
+    improvedText: string;
+  } | null>(null);
+
+  // Aria Announcer
+  const [ariaLiveAnnouncement, setAriaLiveAnnouncement] = useState('');
+
+  // Load document metadata
+  const loadDocMetadata = React.useCallback(async () => {
+    try {
+      const res = await fetch(`/api/documents/${documentId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setDocMetadata(data);
+      }
+    } catch {
+      // Ignore error
+    }
+  }, [documentId, setDocMetadata]);
+
+  // Load collaborator and snapshot records
+  const loadCollaborators = React.useCallback(async () => {
+    try {
+      const res = await fetch(`/api/documents/${documentId}/collaborators`);
+      if (res.ok) {
+        const list: Collaborator[] = await res.json();
+
+        // Find current user's role
+        const me = list.find((c) => c.userId === userId);
+        console.log(
+          '[COLLAB DEBUG] userId:',
+          userId,
+          'list:',
+          JSON.stringify(list),
+          'me:',
+          JSON.stringify(me),
+        );
+        if (me) {
+          setCurrentUserRole(me.role);
+        } else {
+          console.warn('[COLLAB DEBUG] me not found in list!');
+        }
+      } else if (res.status === 403) {
+        toast.error('Access denied: You are not registered as a collaborator on this document');
+        router.push('/');
+      }
+    } catch {
+      // Ignore error
+    }
+  }, [documentId, userId, router, setCurrentUserRole]);
+
+  const loadSnapshots = React.useCallback(async () => {
+    try {
+      const res = await fetch(`/api/documents/${documentId}/snapshots`);
+      if (res.ok) {
+        const list = await res.json();
+        setSnapshots(list);
+      }
+    } catch {
+      // Ignore error
+    }
+  }, [documentId, setSnapshots]);
+
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      loadCollaborators();
+      loadSnapshots();
+      loadDocMetadata();
+    });
+  }, [documentId, loadCollaborators, loadSnapshots, loadDocMetadata]);
+
+  // Announce status changes
+  useEffect(() => {
+    let announcement = '';
+    switch (connectionStatus) {
+      case 'synced':
+        announcement = 'Document fully synced with collaborators.';
+        break;
+      case 'syncing':
+        announcement = 'Uploading changes...';
+        break;
+      case 'connecting':
+        announcement = 'Attempting connection...';
+        break;
+      case 'offline':
+        announcement = 'Relay disconnected. Edits will sync when connection returns.';
+        break;
+    }
+    Promise.resolve().then(() => {
+      setAriaLiveAnnouncement(announcement);
+    });
+  }, [connectionStatus]);
+
+  // Presence awareness sync
+  useEffect(() => {
+    if (!stableAwareness) return;
+
+    const handleAwarenessChange = () => {
+      const states = Array.from(stableAwareness.getStates().entries()) as Array<
+        [number, { user?: { userId: string } }]
+      >;
+      const otherPeers = states
+        .filter(([, state]) => state.user && state.user.userId !== userId)
+        .map(([clientId, state]) => ({
+          clientId,
+          user: state.user,
+        }));
+      setActivePeers(otherPeers);
+    };
+
+    const userColor = getUserColor(userId);
+    stableAwareness.setLocalStateField('user', {
+      userId,
+      name: userName,
+      color: userColor,
+    });
+
+    stableAwareness.on('change', handleAwarenessChange);
+    handleAwarenessChange();
+
+    return () => {
+      stableAwareness.off('change', handleAwarenessChange);
+    };
+  }, [stableAwareness, userId, userName]);
+
+  // ─── Tiptap Editor Core Instantiation ─────────────────────────────────
+  /* eslint-disable react-hooks/refs */
+  const editor = useEditor(
+    {
+      extensions: [
+        StarterKit.configure({
+          history: false, // Collaboration handles undo/redo
+        }),
+        Collaboration.configure({
+          document: stableDoc || undefined,
+          fragment: stableContent || undefined,
+        }),
+        CollaborationCursor.configure({
+          provider:
+            stableProvider && stableAwareness
+              ? Object.assign(Object.create(stableProvider), { awareness: stableAwareness })
+              : ({ awareness: {}, doc: {} } as unknown as Record<string, unknown>),
+          user: {
+            name: userName,
+            color: getUserColor(userId),
+          },
+        }),
+        Placeholder.configure({
+          placeholder: "Type '/' for commands...",
+        }),
+        TaskList,
+        TaskItem.configure({
+          nested: true,
+        }),
+        Highlight.configure({
+          multicolor: true,
+        }),
+        LinkExtension.configure({
+          openOnClick: false,
+        }),
+        GlobalDragHandle.configure({
+          dragHandleWidth: 24,
+        }),
+        // Custom Collapsible nodes
+        ToggleBlock,
+        ToggleHeader,
+        ToggleContent,
+        // Formatting and layout extensions
+        Underline,
+        TextAlign.configure({
+          types: ['heading', 'paragraph'],
+        }),
+        TextStyle,
+        Color,
+        Table.configure({
+          resizable: true,
+        }),
+        TableRow,
+        TableHeader,
+        TableCell,
+        Image.configure({
+          allowBase64: true,
+        }),
+        CalloutBlock,
+      ],
+      editorProps: {
+        attributes: {
+          class:
+            'prose dark:prose-invert focus:outline-none min-h-[480px] w-full max-w-none text-base leading-relaxed',
+        },
+        // Click handler to toggle collapsed list states
+        handleClickOn(view, pos, node, nodePos, event) {
+          const target = event.target as HTMLElement;
+          if (target.classList.contains('toggle-chevron-indicator')) {
+            const transaction = view.state.tr;
+            const parentNode = view.state.doc.nodeAt(nodePos);
+            if (parentNode && parentNode.type.name === 'toggleBlock') {
+              const nextOpen = !parentNode.attrs.open;
+              view.dispatch(
+                transaction.setNodeMarkup(nodePos, undefined, {
+                  ...parentNode.attrs,
+                  open: nextOpen,
+                }),
+              );
+              return true;
+            }
+          }
+          return false;
+        },
+      },
+      immediatelyRender: false,
+    },
+    [doc, provider, content],
+  );
+  /* eslint-enable react-hooks/refs */
+
+  // Sync edit permissions
+  const isViewer = currentUserRole === 'VIEWER';
+  useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(!isViewer);
+  }, [editor, isViewer]);
+
+  // Template loader logic
+  useEffect(() => {
+    if (editor && editor.isEmpty) {
+      const template = localStorage.getItem(`doc-template-${documentId}`);
+      if (template) {
+        localStorage.removeItem(`doc-template-${documentId}`);
+        if (template === 'notes') {
+          editor
+            .chain()
+            .focus()
+            .insertContent(
+              `<h1>Meeting Notes</h1><p>Date: ${new Date().toLocaleDateString()}</p><h2>Attendees</h2><ul><li></li></ul><h2>Agenda</h2><p></p><h2>Discussion</h2><p></p><h2>Action Items</h2><ul data-type="taskList"><li data-checked="false"><label><input type="checkbox"><span></span></label><div></div></li></ul>`,
+            )
+            .run();
+        } else if (template === 'brief') {
+          editor
+            .chain()
+            .focus()
+            .insertContent(
+              `<h1>Project Brief</h1><h2>Overview</h2><p></p><h2>Goals</h2><ul><li></li></ul><h2>Scope</h2><p></p><h2>Timeline</h2><p></p>`,
+            )
+            .run();
+        }
+      }
+    }
+  }, [editor, documentId]);
+
+  // Hide AI assist option on deselect
+  useEffect(() => {
+    if (!editor) return;
+    const handleSelection = () => {
+      const { empty } = editor.state.selection;
+      if (empty) {
+        setShowAiAssist(false);
+        setAiAssistResult(null);
+      }
+    };
+    editor.on('selectionUpdate', handleSelection);
+    return () => {
+      editor.off('selectionUpdate', handleSelection);
+    };
+  }, [editor]);
+
+  // ─── Keyboard Shortcuts Setup ─────────────────────────────────────────
+  useEffect(() => {
+    if (!editor || isViewer) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Notion style list shortcuts:
+      // Cmd/Ctrl+Shift+8 = Bullet list
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '8') {
+        e.preventDefault();
+        editor.chain().focus().toggleBulletList().run();
+      }
+      // Cmd/Ctrl+Shift+7 = Numbered list
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '7') {
+        e.preventDefault();
+        editor.chain().focus().toggleOrderedList().run();
+      }
+      // Cmd/Ctrl+Shift+9 = Todo checklist
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '9') {
+        e.preventDefault();
+        editor.chain().focus().toggleTaskList().run();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editor, isViewer]);
+
+  // ─── Notion Slash Command Selection Handling ──────────────────────────
+  const slashItems = React.useMemo(
+    () => [
+      { name: 'Heading 1', desc: 'Large title header', icon: Heading1, command: 'h1' },
+      { name: 'Heading 2', desc: 'Medium section title', icon: Heading2, command: 'h2' },
+      { name: 'Heading 3', desc: 'Small subsection title', icon: Heading3, command: 'h3' },
+      { name: 'Heading 4', desc: 'Mini header level 4', icon: Heading4, command: 'h4' },
+      { name: 'Heading 5', desc: 'Mini header level 5', icon: Heading5, command: 'h5' },
+      { name: 'Heading 6', desc: 'Mini header level 6', icon: Heading6, command: 'h6' },
+      { name: 'Bulleted List', desc: 'Simple bulleted list', icon: List, command: 'bullet' },
+      { name: 'Numbered List', desc: 'Sequential list', icon: ListOrdered, command: 'ordered' },
+      {
+        name: 'To-do Checklist',
+        desc: 'Collapsible task checkboxes',
+        icon: CheckSquare,
+        command: 'todo',
+      },
+      {
+        name: 'Toggle List',
+        desc: 'Collapsible nested content',
+        icon: ChevronRight,
+        command: 'toggle',
+      },
+      { name: 'Blockquote', desc: 'Capture a highlighted quote', icon: Quote, command: 'quote' },
+      { name: 'Callout Box', desc: 'Highlighted alert box', icon: Lightbulb, command: 'callout' },
+      { name: 'Table', desc: 'Insert a 3x3 table', icon: TableIcon, command: 'table' },
+      { name: 'Image', desc: 'Embed an abstract illustration', icon: ImageIcon, command: 'image' },
+      {
+        name: 'File Attachment',
+        desc: 'Embed a file download link',
+        icon: Paperclip,
+        command: 'file',
+      },
+      {
+        name: 'Bookmark Card',
+        desc: 'Embed a rich link card',
+        icon: Bookmark,
+        command: 'bookmark',
+      },
+      { name: 'Code Block', desc: 'Formatted syntax block', icon: Code2, command: 'codeblock' },
+      { name: 'Divider', desc: 'Horizontal separation rule', icon: Minus, command: 'divider' },
+    ],
+    [],
+  );
+
+  // Monitor cursor selection for Slash commands
+  useEffect(() => {
+    if (!editor || isViewer) return;
+
+    const handleEditorUpdate = () => {
+      const { state } = editor;
+      const { $from } = state.selection;
+      const currentBlock = $from.node($from.depth);
+      const text = currentBlock.textContent;
+
+      // Only open menu if line starts with '/'
+      if (text.startsWith('/')) {
+        const query = text.slice(1).toLowerCase();
+        try {
+          const coords = editor.view.coordsAtPos($from.pos);
+          setSlashMenu({
+            x: coords.left,
+            y: coords.top + window.scrollY + 24, // Position just below the block cursor
+            filterText: query,
+            selectionFrom: $from.start(),
+          });
+          setSlashSelectedIndex(0);
+        } catch {
+          setSlashMenu(null);
+        }
+      } else {
+        setSlashMenu(null);
+      }
+    };
+
+    editor.on('selectionUpdate', handleEditorUpdate);
+    editor.on('update', handleEditorUpdate);
+
+    return () => {
+      editor.off('selectionUpdate', handleEditorUpdate);
+      editor.off('update', handleEditorUpdate);
+    };
+  }, [editor, isViewer]);
+
+  const executeSlashCommand = React.useCallback(
+    (cmd: string) => {
+      if (!editor || !slashMenu) return;
+
+      const { selectionFrom } = slashMenu;
+      const to = editor.state.selection.$from.pos;
+
+      // First delete the slash query text
+      editor.chain().focus().deleteRange({ from: selectionFrom, to }).run();
+
+      // Insert block type
+      switch (cmd) {
+        case 'h1':
+          editor.chain().focus().setNode('heading', { level: 1 }).run();
+          break;
+        case 'h2':
+          editor.chain().focus().setNode('heading', { level: 2 }).run();
+          break;
+        case 'h3':
+          editor.chain().focus().setNode('heading', { level: 3 }).run();
+          break;
+        case 'h4':
+          editor.chain().focus().setNode('heading', { level: 4 }).run();
+          break;
+        case 'h5':
+          editor.chain().focus().setNode('heading', { level: 5 }).run();
+          break;
+        case 'h6':
+          editor.chain().focus().setNode('heading', { level: 6 }).run();
+          break;
+        case 'bullet':
+          editor.chain().focus().toggleBulletList().run();
+          break;
+        case 'ordered':
+          editor.chain().focus().toggleOrderedList().run();
+          break;
+        case 'todo':
+          editor.chain().focus().toggleTaskList().run();
+          break;
+        case 'toggle':
+          editor
+            .chain()
+            .focus()
+            .insertContent({
+              type: 'toggleBlock',
+              attrs: { open: true },
+              content: [
+                {
+                  type: 'toggleHeader',
+                  content: [{ type: 'text', text: 'Toggle block title' }],
+                },
+                {
+                  type: 'toggleContent',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'Nested contents go here...' }],
+                    },
+                  ],
+                },
+              ],
+            })
+            .run();
+          break;
+        case 'quote':
+          editor.chain().focus().toggleBlockquote().run();
+          break;
+        case 'callout':
+          editor
+            .chain()
+            .focus()
+            .insertContent({
+              type: 'calloutBlock',
+              attrs: { emoji: '💡', color: 'default' },
+              content: [
+                {
+                  type: 'paragraph',
+                  content: [{ type: 'text', text: 'Callout text here...' }],
+                },
+              ],
+            })
+            .run();
+          break;
+        case 'table':
+          editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+          break;
+        case 'image':
+          editor
+            .chain()
+            .focus()
+            .setImage({
+              src: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60',
+            })
+            .run();
+          break;
+        case 'file':
+          editor
+            .chain()
+            .focus()
+            .insertContent(
+              `
+          <p class="file-attachment border border-border p-3 rounded-lg flex items-center gap-2 bg-muted/20 my-2 select-none" contenteditable="false">
+            <svg class="h-4 w-4 text-primary shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            <span class="font-semibold text-xs text-foreground truncate">attachment.pdf</span>
+            <span class="text-[10px] text-muted-foreground shrink-0">(2.4 MB)</span>
+          </p>
+        `,
+            )
+            .run();
+          break;
+        case 'bookmark':
+          editor
+            .chain()
+            .focus()
+            .insertContent(
+              `
+          <p class="bookmark-block border border-border p-3 rounded-lg flex items-center gap-3 bg-muted/10 my-2 cursor-pointer hover:bg-muted/20 transition-colors" contenteditable="false">
+            <span class="flex-1 space-y-0.5 min-w-0">
+              <span class="font-bold text-xs block text-foreground truncate">DocSync Workspace</span>
+              <span class="text-[10px] text-muted-foreground block truncate">A collaborative local-first real-time workspace.</span>
+            </span>
+            <span class="text-[10px] font-mono text-primary select-all shrink-0">https://docsync.dev</span>
+          </p>
+        `,
+            )
+            .run();
+          break;
+        case 'codeblock':
+          editor.chain().focus().toggleCodeBlock().run();
+          break;
+        case 'divider':
+          editor.chain().focus().setHorizontalRule().run();
+          break;
+      }
+
+      setSlashMenu(null);
+    },
+    [editor, slashMenu, setSlashMenu],
+  );
+
+  // Intercept keys when slash menu is open
+  useEffect(() => {
+    if (!editor || !slashMenu) return;
+
+    const handleSlashMenuKeys = (e: KeyboardEvent) => {
+      const filtered = slashItems.filter((item) =>
+        item.name.toLowerCase().includes(slashMenu.filterText),
+      );
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashSelectedIndex((prev) => (prev + 1) % filtered.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashSelectedIndex((prev) => (prev - 1 + filtered.length) % filtered.length);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (filtered[slashSelectedIndex]) {
+          executeSlashCommand(filtered[slashSelectedIndex].command);
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setSlashMenu(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleSlashMenuKeys, true);
+    return () => window.removeEventListener('keydown', handleSlashMenuKeys, true);
+  }, [editor, slashMenu, slashSelectedIndex, executeSlashCommand, slashItems]);
+
+  const filteredSlashItems = slashMenu
+    ? slashItems.filter((item) => item.name.toLowerCase().includes(slashMenu.filterText))
+    : [];
+
+  // Gutter reordering triggers
+  const handleGutterPlus = () => {
+    if (!editor) return;
+    editor.chain().focus().insertContent({ type: 'paragraph' }).run();
+    editor.chain().insertContent('/').run();
+  };
+
+  // ─── AI Feature: Document Summarization ──────────────────────────────
+  const handleAiSummarize = async () => {
+    if (!editor) return;
+    setIsSummarizing(true);
+    setAiSummary('');
+
+    try {
+      const response = await fetch('/api/ai/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: editor.getText(),
+          documentId,
+        }),
+      });
+
+      if (response.status === 503) {
+        setIsAiConfigured(false);
+        setAiSummary('AI keys are not configured. Summarization is disabled.');
+        return;
+      }
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to generate summary');
+      }
+
+      // Stream the response reader
+      const reader = response.body?.getReader();
+      if (!reader) return;
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        setAiSummary((prev) => prev + chunk);
+      }
+    } catch (e) {
+      console.error(e);
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      setAiSummary(`Error: ${msg}`);
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
+  // ─── AI Feature: Semantic Version History Search ─────────────────────
+  const handleAiVersionSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiSearchQuery.trim()) return;
+
+    setAiSearchLoading(true);
+    setAiSearchResult(null);
+
+    try {
+      const res = await fetch('/api/ai/version-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: aiSearchQuery.trim(),
+          documentId,
+        }),
+      });
+
+      if (res.status === 503) {
+        setIsAiConfigured(false);
+        return;
+      }
+
+      const data = await res.json();
+      if (res.ok) {
+        setAiSearchResult(data);
+      } else {
+        toast.error(data.error || 'Failed to search versions');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAiSearchLoading(false);
+    }
+  };
+
+  // ─── AI Feature: Writing Assist (Improve Text) ───────────────────────
+  const handleAiWritingAssist = async () => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    const selectedText = editor.state.doc.textBetween(from, to, ' ');
+
+    if (!selectedText.trim()) {
+      toast.warning('Please select a paragraph or block of text first to improve.');
+      return;
+    }
+
+    setAiAssistLoading(true);
+    setAiAssistResult(null);
+
+    try {
+      const res = await fetch('/api/ai/writing-assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: selectedText,
+          documentId,
+          instruction: aiAssistInstruction,
+        }),
+      });
+
+      if (res.status === 503) {
+        setIsAiConfigured(false);
+        setShowAiAssist(false);
+        return;
+      }
+
+      const data = await res.json();
+      if (res.ok) {
+        setAiAssistResult(data);
+      } else {
+        toast.error(data.error || 'AI assist request failed');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAiAssistLoading(false);
+    }
+  };
+
+  const handleAcceptAssist = () => {
+    if (!editor || !aiAssistResult) return;
+    // Replace text as standard ProseMirror edit, so it merges cleanly with other collaborators and is tracked in RLS/history
+    editor.chain().focus().insertContent(aiAssistResult.improvedText).run();
+    setShowAiAssist(false);
+    setAiAssistResult(null);
+  };
+
+  // Apply link in Bubble Menu
+  const applyLink = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editor) return;
+
+    if (linkUrl.trim()) {
+      editor.chain().focus().setLink({ href: linkUrl.trim() }).run();
+    } else {
+      editor.chain().focus().unsetLink().run();
+    }
+    setLinkUrl('');
+    setShowLinkInput(false);
+  };
+
+  // Snapshot operations
+  const executeSaveVersion = async (label: string) => {
+    setIsSavingVersion(true);
+    try {
+      // Capture the client's authoritative Y.Doc state at checkpoint time.
+      // Sending this to the server avoids race conditions where the WS relay
+      // has already persisted future edits to the DB by the time this POST
+      // is processed.
+      let stateBase64: string | undefined;
+      if (doc) {
+        const stateUpdate = Y.encodeStateAsUpdate(doc);
+        // Convert Uint8Array to base64
+        let binary = '';
+        for (let i = 0; i < stateUpdate.byteLength; i++) {
+          binary += String.fromCharCode(stateUpdate[i]);
+        }
+        stateBase64 = btoa(binary);
+      }
+
+      const res = await fetch(`/api/documents/${documentId}/snapshots`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label, state: stateBase64 }),
+      });
+
+      if (res.ok) {
+        toast.success(`Checkpoint "${label}" saved`);
+        loadSnapshots();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to create snapshot');
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error('Network error creating snapshot');
+    } finally {
+      setIsSavingVersion(false);
+    }
+  };
+
+  const handlePreviewSnapshot = async (snapshot: Snapshot) => {
+    setPreviewingSnapshot(snapshot);
+    setPreviewText('Loading version details...');
+
+    try {
+      const res = await fetch(`/api/documents/${documentId}/snapshots/${snapshot.id}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+
+      const tempDoc = new Y.Doc();
+      const stateUpdateBytes = new Uint8Array(
+        atob(data.state)
+          .split('')
+          .map((c) => c.charCodeAt(0)),
+      );
+      Y.applyUpdate(tempDoc, stateUpdateBytes);
+
+      const xmlFragment = tempDoc.getXmlFragment('default');
+      setPreviewText(xmlFragment.toString() || '(Empty document)');
+      tempDoc.destroy();
+    } catch {
+      setPreviewText('Failed to render snapshot preview.');
+    }
+  };
+
+  const executeRestoreSnapshot = async () => {
+    if (!pendingRestoreSnapshot) return;
+    try {
+      const res = await fetch(
+        `/api/documents/${documentId}/snapshots/${pendingRestoreSnapshot.id}/restore`,
+        {
+          method: 'POST',
+        },
+      );
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Restore failed');
+      }
+
+      const { snapshotState: base64State } = await res.json();
+
+      if (doc && editor) {
+        // 1. Hydrate target snapshot state into a temporary Y.Doc
+        const targetDoc = new Y.Doc();
+        const stateBytes = new Uint8Array(
+          atob(base64State)
+            .split('')
+            .map((c) => c.charCodeAt(0)),
+        );
+        Y.applyUpdate(targetDoc, stateBytes);
+        const targetFragment = targetDoc.getXmlFragment('default');
+
+        // 2. Extract plain text from the target snapshot
+        const targetXml = targetFragment.toString();
+        const targetText = targetXml.replace(/<[^>]*>/g, '');
+
+        // 3. Use TipTap editor to replace content — this correctly propagates
+        //    through ProseMirror → Yjs Collaboration binding → Y.Doc
+        editor.chain().selectAll().deleteSelection().run();
+        if (targetText) {
+          editor.chain().focus().insertContent(targetText).run();
+        }
+
+        targetDoc.destroy();
+      }
+
+      toast.success(`Restored to checkpoint "${pendingRestoreSnapshot.label}"`);
+      setPreviewingSnapshot(null);
+      loadSnapshots();
+    } catch (err) {
+      console.error('[Restore] Snapshot restore error:', err);
+      const msg = err instanceof Error ? err.message : 'Failed to restore snapshot';
+      toast.error(msg);
+    } finally {
+      setPendingRestoreSnapshot(null);
+    }
+  };
+
+  const handleSaveVersionTrigger = () => {
+    setCheckpointOpen(true);
+  };
+
+  const handleRestoreSnapshotTrigger = (snapshot: Snapshot) => {
+    setPendingRestoreSnapshot(snapshot);
+    setConfirmRestoreOpen(true);
+  };
+
+  // Connection State badge style
+  const getConnectionPill = () => {
+    switch (connectionStatus) {
+      case 'synced':
+        return (
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-800 transition-all duration-300 dark:text-emerald-400"
+            role="status"
+          >
+            <Wifi className="h-3.5 w-3.5" /> Synced
+          </span>
+        );
+      case 'syncing':
+        return (
+          <span
+            className="inline-flex animate-pulse items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-800 transition-all duration-300 dark:text-amber-400"
+            role="status"
+          >
+            <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Saving...
+          </span>
+        );
+      case 'connecting':
+        return (
+          <span
+            className="inline-flex animate-pulse items-center gap-1.5 rounded-full border border-neutral-500/20 bg-neutral-500/10 px-3 py-1 text-xs font-semibold text-neutral-800 transition-all duration-300 dark:text-neutral-300"
+            role="status"
+          >
+            <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Reconnecting
+          </span>
+        );
+      case 'offline':
+      default:
+        return (
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-800 transition-all duration-300 dark:text-red-400"
+            role="status"
+          >
+            <WifiOff className="h-3.5 w-3.5" /> Offline
+          </span>
+        );
+    }
+  };
+
+  const toggleBold = () => editor?.chain().focus().toggleBold().run();
+  const toggleItalic = () => editor?.chain().focus().toggleItalic().run();
+  const toggleCode = () => editor?.chain().focus().toggleCode().run();
+  const toggleUnderline = () => editor?.chain().focus().toggleUnderline().run();
+  const toggleStrike = () => editor?.chain().focus().toggleStrike().run();
+
+  return (
+    <div className="from-background to-muted/20 flex min-h-screen flex-col bg-radial">
+      {/* Screen Reader connection alerts */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {ariaLiveAnnouncement}
+      </div>
+
+      {/* Main Top Header */}
+      <header className="border-border/40 bg-background/80 sticky top-0 z-10 border-b backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="group border-border bg-card hover:bg-muted flex h-9 w-9 items-center justify-center rounded-xl border transition-colors"
+              aria-label="Go back to Dashboard"
+            >
+              <ArrowLeft className="text-muted-foreground group-hover:text-foreground h-4.5 w-4.5" />
+            </Link>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight">DocSync Editor Workspace</h1>
+              <p className="text-muted-foreground text-[10px] select-all">
+                Document ID: {documentId}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {getConnectionPill()}
+            <button
+              data-testid="share-document-btn"
+              onClick={() => setShareOpen(true)}
+              className="border-border bg-background hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:ring-3"
+            >
+              <Share2 className="h-4 w-4" /> Share
+            </button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="lg:hidden"
+              onClick={() => setIsSidebarOpen(true)}
+              aria-label="Open document timeline panel"
+            >
+              <Menu className="h-4.5 w-4.5" />
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* Split Panels */}
+      <div className="mx-auto flex w-full max-w-7xl flex-1 items-stretch gap-6 px-6 py-8">
+        {/* Editor Main Section */}
+        <div className="min-w-0 flex-1 space-y-4">
+          {/* Document metadata card */}
+          <div className="border-border bg-card space-y-3 rounded-2xl border p-6 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-primary font-mono text-[10px] font-bold tracking-wider uppercase">
+                Live Workspace
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground text-[10px] font-semibold">
+                  Access Level:
+                </span>
+                <span className="bg-muted rounded-md px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase">
+                  {currentUserRole || 'Resolving Role...'}
+                </span>
+              </div>
+            </div>
+
+            {/* Inline premium rename field */}
+            <input
+              type="text"
+              value={docMetadata?.title || ''}
+              onChange={(e) =>
+                setDocMetadata((prev) => (prev ? { ...prev, title: e.target.value } : null))
+              }
+              onBlur={async () => {
+                if (!docMetadata?.title.trim()) return;
+                try {
+                  const res = await fetch(`/api/documents/${documentId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: docMetadata.title.trim() }),
+                  });
+                  if (res.ok) {
+                    toast.success('Title saved');
+                  } else {
+                    toast.error('Failed to update title');
+                  }
+                } catch {
+                  toast.error('Failed to update title');
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              disabled={isViewer}
+              className="hover:border-border/30 focus:border-primary/50 w-full rounded border-b border-transparent bg-transparent py-1 text-2xl font-extrabold tracking-tight focus:outline-none"
+              placeholder="Untitled Document"
+            />
+          </div>
+
+          {/* Unconfigured API Key friendly alert banner */}
+          {!isAiConfigured && (
+            <div className="border-warning/20 bg-warning/5 flex items-center gap-3 rounded-xl border p-4 text-xs">
+              <AlertCircle className="h-5 w-5 shrink-0 text-amber-600" />
+              <div className="flex-1">
+                <span className="font-bold text-amber-800 dark:text-amber-400">
+                  AI Integration Notice:
+                </span>
+                <p className="text-muted-foreground mt-0.5">
+                  AI Summarizer, writing assist, and semantic version search are currently disabled
+                  because no API keys were found. To enable them, set{' '}
+                  <code className="bg-muted rounded px-1 font-mono text-[10px]">GROQ_API_KEY</code>{' '}
+                  or{' '}
+                  <code className="bg-muted rounded px-1 font-mono text-[10px]">
+                    GEMINI_API_KEY
+                  </code>{' '}
+                  in your environment. Core editing and live syncing remain fully functional.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Collaborative interactive container */}
+          <div className="border-border bg-card relative min-h-[500px] rounded-2xl border p-8 shadow-xl md:p-12">
+            {/* Embedded Drag Handle and Plus gutter controls */}
+            {!isViewer && editor && (
+              <div
+                className="pointer-events-none absolute top-0 left-3 z-20 flex flex-col gap-0.5 opacity-0 transition-opacity hover:opacity-100"
+                id="editor-gutter-controls"
+              >
+                <button
+                  onClick={handleGutterPlus}
+                  className="text-muted-foreground hover:bg-muted hover:text-foreground pointer-events-auto flex h-5 w-5 items-center justify-center rounded-sm transition-colors"
+                  title="Insert paragraph below"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+                <div className="drag-handle text-muted-foreground hover:bg-muted hover:text-foreground pointer-events-auto flex h-5 w-5 cursor-grab items-center justify-center rounded-sm active:cursor-grabbing">
+                  <GripVertical className="h-3.5 w-3.5" />
+                </div>
+              </div>
+            )}
+
+            {/* Notion Bubble Menu */}
+            {editor && !isViewer && (
+              <BubbleMenu editor={editor} tippyOptions={{ duration: 150 }}>
+                <div className="border-border bg-background/95 animate-in zoom-in-95 flex max-w-[90vw] flex-wrap items-center gap-1 rounded-xl border p-1.5 shadow-xl backdrop-blur-md duration-100">
+                  {/* AI Writing Assist Button */}
+                  {isAiConfigured && (
+                    <>
+                      <Button
+                        variant={showAiAssist ? 'secondary' : 'ghost'}
+                        size="icon"
+                        onClick={() => {
+                          setAiAssistResult(null);
+                          setShowAiAssist(!showAiAssist);
+                        }}
+                        className="text-primary hover:text-primary h-7 w-7 shrink-0"
+                        aria-label="AI Writing Assist"
+                        title="AI Improve Selection"
+                      >
+                        <Wand2 className="h-3.5 w-3.5" />
+                      </Button>
+                      <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
+                    </>
+                  )}
+
+                  {/* 1. Block Conversion Dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 shrink-0 gap-1 px-2 text-xs font-semibold"
+                        title="Convert block type"
+                      >
+                        {(() => {
+                          if (editor.isActive('heading', { level: 1 })) return 'H1';
+                          if (editor.isActive('heading', { level: 2 })) return 'H2';
+                          if (editor.isActive('heading', { level: 3 })) return 'H3';
+                          if (editor.isActive('heading', { level: 4 })) return 'H4';
+                          if (editor.isActive('heading', { level: 5 })) return 'H5';
+                          if (editor.isActive('heading', { level: 6 })) return 'H6';
+                          if (editor.isActive('bulletList')) return 'Bullet List';
+                          if (editor.isActive('orderedList')) return 'Numbered List';
+                          if (editor.isActive('taskList')) return 'Todo List';
+                          if (editor.isActive('toggleBlock')) return 'Toggle Block';
+                          if (editor.isActive('blockquote')) return 'Quote';
+                          if (editor.isActive('codeBlock')) return 'Code Block';
+                          if (editor.isActive('calloutBlock')) return 'Callout';
+                          return 'Text';
+                        })()}
+                        <ChevronDown className="h-3 w-3 opacity-60" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="max-h-64 w-44 overflow-y-auto">
+                      <DropdownMenuItem onClick={() => editor.chain().focus().setParagraph().run()}>
+                        <FileText className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Text
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+                      >
+                        <Heading1 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 1
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+                      >
+                        <Heading2 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 2
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+                      >
+                        <Heading3 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 3
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().toggleHeading({ level: 4 }).run()}
+                      >
+                        <Heading4 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 4
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().toggleHeading({ level: 5 }).run()}
+                      >
+                        <Heading5 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 5
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().toggleHeading({ level: 6 }).run()}
+                      >
+                        <Heading6 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 6
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().toggleBulletList().run()}
+                      >
+                        <List className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Bullet List
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                      >
+                        <ListOrdered className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Numbered
+                        List
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().toggleTaskList().run()}
+                      >
+                        <CheckSquare className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Todo List
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                      >
+                        <Quote className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Quote
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+                      >
+                        <Code2 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Code Block
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().toggleCallout().run()}
+                      >
+                        <Lightbulb className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Callout
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
+
+                  {/* 2. Formatting Style Toggles */}
+                  <Button
+                    variant={editor.isActive('bold') ? 'secondary' : 'ghost'}
+                    size="icon"
+                    onClick={toggleBold}
+                    className="h-7 w-7 shrink-0"
+                    aria-label="Format Bold"
+                  >
+                    <Bold className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant={editor.isActive('italic') ? 'secondary' : 'ghost'}
+                    size="icon"
+                    onClick={toggleItalic}
+                    className="h-7 w-7 shrink-0"
+                    aria-label="Format Italic"
+                  >
+                    <Italic className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant={editor.isActive('underline') ? 'secondary' : 'ghost'}
+                    size="icon"
+                    onClick={toggleUnderline}
+                    className="h-7 w-7 shrink-0"
+                    aria-label="Format Underline"
+                  >
+                    <UnderlineIcon className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant={editor.isActive('strike') ? 'secondary' : 'ghost'}
+                    size="icon"
+                    onClick={toggleStrike}
+                    className="h-7 w-7 shrink-0"
+                    aria-label="Format Strikethrough"
+                  >
+                    <Strikethrough className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant={editor.isActive('code') ? 'secondary' : 'ghost'}
+                    size="icon"
+                    onClick={toggleCode}
+                    className="h-7 w-7 shrink-0"
+                    aria-label="Format Code"
+                  >
+                    <Code className="h-3.5 w-3.5" />
+                  </Button>
+
+                  <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
+
+                  {/* 3. Text Alignment Dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0"
+                        title="Text alignment"
+                      >
+                        {(() => {
+                          if (editor.isActive({ textAlign: 'center' }))
+                            return <AlignCenter className="h-3.5 w-3.5" />;
+                          if (editor.isActive({ textAlign: 'right' }))
+                            return <AlignRight className="h-3.5 w-3.5" />;
+                          if (editor.isActive({ textAlign: 'justify' }))
+                            return <AlignJustify className="h-3.5 w-3.5" />;
+                          return <AlignLeft className="h-3.5 w-3.5" />;
+                        })()}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="center" className="w-32">
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().setTextAlign('left').run()}
+                      >
+                        <AlignLeft className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Left
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().setTextAlign('center').run()}
+                      >
+                        <AlignCenter className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Center
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().setTextAlign('right').run()}
+                      >
+                        <AlignRight className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Right
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().setTextAlign('justify').run()}
+                      >
+                        <AlignJustify className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Justify
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {/* 4. Text Color Dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0"
+                        title="Text Color"
+                      >
+                        <span className="decoration-primary text-xs font-bold underline decoration-2">
+                          A
+                        </span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="center" className="w-36">
+                      <DropdownMenuItem onClick={() => editor.chain().focus().unsetColor().run()}>
+                        <div className="border-border bg-foreground h-3 w-3 shrink-0 rounded-full border" />
+                        Default
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().setColor('#6b7280').run()}
+                      >
+                        <div className="h-3 w-3 shrink-0 rounded-full bg-gray-500" />
+                        Gray
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().setColor('#3b82f6').run()}
+                      >
+                        <div className="h-3 w-3 shrink-0 rounded-full bg-blue-500" />
+                        Blue
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().setColor('#10b981').run()}
+                      >
+                        <div className="h-3 w-3 shrink-0 rounded-full bg-emerald-500" />
+                        Green
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().setColor('#f59e0b').run()}
+                      >
+                        <div className="h-3 w-3 shrink-0 rounded-full bg-amber-500" />
+                        Yellow
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().setColor('#ef4444').run()}
+                      >
+                        <div className="h-3 w-3 shrink-0 rounded-full bg-red-500" />
+                        Red
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().setColor('#8b5cf6').run()}
+                      >
+                        <div className="h-3 w-3 shrink-0 rounded-full bg-violet-500" />
+                        Purple
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {/* 5. Highlight Color Dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0"
+                        title="Highlight Color"
+                      >
+                        <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="center" className="w-40">
+                      <DropdownMenuItem
+                        onClick={() => editor.chain().focus().unsetHighlight().run()}
+                      >
+                        <span className="text-muted-foreground mr-2 shrink-0 text-[10px] line-through">
+                          None
+                        </span>
+                        Clear Highlight
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() =>
+                          editor.chain().focus().toggleHighlight({ color: '#fef08a' }).run()
+                        }
+                      >
+                        <div className="h-3 w-3 shrink-0 rounded border border-yellow-300 bg-yellow-200" />
+                        Yellow
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          editor.chain().focus().toggleHighlight({ color: '#bfdbfe' }).run()
+                        }
+                      >
+                        <div className="h-3 w-3 shrink-0 rounded border border-blue-300 bg-blue-200" />
+                        Blue
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          editor.chain().focus().toggleHighlight({ color: '#bbf7d0' }).run()
+                        }
+                      >
+                        <div className="h-3 w-3 shrink-0 rounded border border-green-300 bg-green-200" />
+                        Green
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          editor.chain().focus().toggleHighlight({ color: '#fbcfe8' }).run()
+                        }
+                      >
+                        <div className="h-3 w-3 shrink-0 rounded border border-pink-300 bg-pink-200" />
+                        Pink
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          editor.chain().focus().toggleHighlight({ color: '#fecaca' }).run()
+                        }
+                      >
+                        <div className="h-3 w-3 shrink-0 rounded border border-red-300 bg-red-200" />
+                        Red
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          editor.chain().focus().toggleHighlight({ color: '#ddd6fe' }).run()
+                        }
+                      >
+                        <div className="h-3 w-3 shrink-0 rounded border border-violet-300 bg-violet-200" />
+                        Purple
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
+
+                  {/* 6. Link Editing */}
+                  {showLinkInput ? (
+                    <form
+                      onSubmit={applyLink}
+                      className="animate-in slide-in-from-left-2 flex shrink-0 items-center gap-1.5 px-1.5 duration-100"
+                    >
+                      <input
+                        type="url"
+                        placeholder="https://..."
+                        value={linkUrl}
+                        onChange={(e) => setLinkUrl(e.target.value)}
+                        className="border-input bg-background focus:border-primary w-28 rounded border px-2 py-0.5 text-xs outline-none"
+                        autoFocus
+                      />
+                      <Button type="submit" size="xs" className="h-6 px-2 text-[10px]">
+                        Save
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => setShowLinkInput(false)}
+                        className="text-muted-foreground hover:text-foreground text-[10px]"
+                      >
+                        Cancel
+                      </button>
+                    </form>
+                  ) : (
+                    <Button
+                      variant={editor.isActive('link') ? 'secondary' : 'ghost'}
+                      size="icon"
+                      onClick={() => {
+                        setLinkUrl(editor.getAttributes('link').href || '');
+                        setShowLinkInput(true);
+                      }}
+                      className="h-7 w-7 shrink-0"
+                      aria-label="Insert Link"
+                    >
+                      <LinkIcon className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              </BubbleMenu>
+            )}
+
+            {/* AI Writing Assist Diff Suggestion Popover */}
+            {showAiAssist && (
+              <div className="border-border bg-background/95 animate-in fade-in slide-in-from-top-2 absolute top-12 left-1/2 z-30 w-96 -translate-x-1/2 space-y-3 rounded-xl border p-4 shadow-2xl backdrop-blur-md duration-150">
+                <div className="border-border/30 flex items-center justify-between border-b pb-2">
+                  <span className="text-primary flex items-center gap-1 text-xs font-bold">
+                    <Wand2 className="h-3.5 w-3.5" /> AI Paragraph Assist
+                  </span>
+                  <button
+                    onClick={() => {
+                      setShowAiAssist(false);
+                      setAiAssistResult(null);
+                    }}
+                    className="text-muted-foreground hover:text-foreground text-xs"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {!aiAssistResult ? (
+                  <div className="space-y-3">
+                    <p className="text-muted-foreground text-[10px]">
+                      What changes would you like to make to the selection?
+                    </p>
+                    <input
+                      type="text"
+                      placeholder="e.g. make it professional, make it more concise..."
+                      value={aiAssistInstruction}
+                      onChange={(e) => setAiAssistInstruction(e.target.value)}
+                      className="border-input bg-background focus:border-primary focus:ring-primary/20 w-full rounded-lg border px-3 py-1.5 text-xs outline-none focus:ring-1"
+                    />
+                    <Button
+                      onClick={handleAiWritingAssist}
+                      disabled={aiAssistLoading}
+                      size="xs"
+                      className="w-full"
+                    >
+                      {aiAssistLoading ? 'Thinking...' : 'Generate Suggestion'}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 gap-2 text-[11px]">
+                      <div className="rounded-lg border border-red-500/10 bg-red-500/5 p-2 text-red-800 dark:text-red-400">
+                        <span className="block text-[9px] font-bold tracking-wider text-red-600 uppercase">
+                          Original text
+                        </span>
+                        {aiAssistResult.originalText}
+                      </div>
+                      <div className="rounded-lg border border-emerald-500/10 bg-emerald-500/5 p-2 text-emerald-800 dark:text-emerald-400">
+                        <span className="block text-[9px] font-bold tracking-wider text-emerald-600 uppercase">
+                          AI Improved text
+                        </span>
+                        {aiAssistResult.improvedText}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleAcceptAssist}
+                        size="xs"
+                        className="flex-1 gap-1 bg-emerald-600 hover:bg-emerald-700"
+                      >
+                        <Check className="h-3 w-3" /> Accept & Edit
+                      </Button>
+                      <Button
+                        onClick={() => setAiAssistResult(null)}
+                        variant="outline"
+                        size="xs"
+                        className="flex-1 gap-1"
+                      >
+                        <Ban className="h-3 w-3" /> Reject
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Notion Floating Slash Menu */}
+            {slashMenu && filteredSlashItems.length > 0 && (
+              <div
+                className="border-border bg-background/95 animate-in zoom-in-95 absolute z-50 w-64 overflow-hidden rounded-xl border p-1.5 shadow-2xl backdrop-blur-md duration-100"
+                style={{ top: slashMenu.y, left: slashMenu.x }}
+                role="listbox"
+                aria-label="Block creation commands"
+              >
+                <div className="text-muted-foreground border-border/20 mb-1 border-b px-2 py-1 text-[10px] font-bold uppercase">
+                  Commands
+                </div>
+                <div className="max-h-60 space-y-0.5 overflow-y-auto">
+                  {filteredSlashItems.map((item, idx) => {
+                    const Icon = item.icon;
+                    const isSelected = idx === slashSelectedIndex;
+                    return (
+                      <button
+                        key={item.name}
+                        onClick={() => executeSlashCommand(item.command)}
+                        className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors ${
+                          isSelected
+                            ? 'bg-primary text-primary-foreground'
+                            : 'hover:bg-muted text-foreground'
+                        }`}
+                        role="option"
+                        aria-selected={isSelected}
+                      >
+                        <div
+                          className={`shrink-0 rounded-md p-1 ${isSelected ? 'bg-primary-foreground/10 text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+                        >
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="truncate">
+                          <div className="text-xs leading-tight font-bold">{item.name}</div>
+                          <div
+                            className={`text-[9px] leading-normal ${isSelected ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}
+                          >
+                            {item.desc}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ProseMirror Editor Canvas */}
+            <EditorContent editor={editor} />
+          </div>
+
+          {/* Active Collaborators Presence indicator bar */}
+          {activePeers.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-muted-foreground font-semibold">Collaborating now:</span>
+              <div className="flex flex-wrap gap-2">
+                {activePeers.map((peer, idx) => (
+                  <span
+                    key={peer.clientId || idx}
+                    className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-medium"
+                    style={{ backgroundColor: `${peer.user?.color}15`, color: peer.user?.color }}
+                  >
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ backgroundColor: peer.user?.color }}
+                    ></span>
+                    {peer.user?.name || 'Anonymous'}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar panels */}
+        <aside className="hidden w-80 shrink-0 space-y-6 lg:block">
+          <SidebarContent
+            snapshots={snapshots}
+            previewingSnapshot={previewingSnapshot}
+            previewText={previewText}
+            setPreviewingSnapshot={setPreviewingSnapshot}
+            handlePreviewSnapshot={handlePreviewSnapshot}
+            handleRestoreSnapshotTrigger={handleRestoreSnapshotTrigger}
+            handleSaveVersionTrigger={handleSaveVersionTrigger}
+            isSavingVersion={isSavingVersion}
+            isAiConfigured={isAiConfigured}
+            aiSummary={aiSummary}
+            isSummarizing={isSummarizing}
+            handleAiSummarize={handleAiSummarize}
+            aiSearchQuery={aiSearchQuery}
+            setAiSearchQuery={setAiSearchQuery}
+            aiSearchLoading={aiSearchLoading}
+            aiSearchResult={aiSearchResult}
+            handleAiVersionSearch={handleAiVersionSearch}
+            isViewer={isViewer}
+          />
+        </aside>
+      </div>
+
+      {/* Mobile sidebar sliding sheet */}
+      {isSidebarOpen && (
+        <div className="bg-background/60 fixed inset-0 z-50 flex justify-end backdrop-blur-xs lg:hidden">
+          <div className="border-border bg-card animate-in slide-in-from-right relative h-full w-80 overflow-y-auto border-l p-6 shadow-2xl duration-200">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-4 right-4"
+              onClick={() => setIsSidebarOpen(false)}
+              aria-label="Close sidebar panel"
+            >
+              <X className="h-4.5 w-4.5" />
+            </Button>
+
+            <div className="pt-6">
+              <SidebarContent
+                snapshots={snapshots}
+                previewingSnapshot={previewingSnapshot}
+                previewText={previewText}
+                setPreviewingSnapshot={setPreviewingSnapshot}
+                handlePreviewSnapshot={handlePreviewSnapshot}
+                handleRestoreSnapshotTrigger={handleRestoreSnapshotTrigger}
+                handleSaveVersionTrigger={handleSaveVersionTrigger}
+                isSavingVersion={isSavingVersion}
+                isAiConfigured={isAiConfigured}
+                aiSummary={aiSummary}
+                isSummarizing={isSummarizing}
+                handleAiSummarize={handleAiSummarize}
+                aiSearchQuery={aiSearchQuery}
+                setAiSearchQuery={setAiSearchQuery}
+                aiSearchLoading={aiSearchLoading}
+                aiSearchResult={aiSearchResult}
+                handleAiVersionSearch={handleAiVersionSearch}
+                isViewer={isViewer}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Popups & Dialog Modals */}
+      <ShareDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        documentId={documentId}
+        currentUserRole={currentUserRole}
+        currentUserId={userId}
+      />
+
+      <CheckpointLabelDialog
+        open={checkpointOpen}
+        onOpenChange={setCheckpointOpen}
+        onSubmit={executeSaveVersion}
+        isLoading={isSavingVersion}
+      />
+
+      <ConfirmDialog
+        open={confirmRestoreOpen}
+        onOpenChange={setConfirmRestoreOpen}
+        title="Restore Checkpoint"
+        description={`Are you sure you want to restore the document state to checkpoint "${pendingRestoreSnapshot?.label || ''}"? Connected peers will merge details dynamically.`}
+        confirmLabel="Restore"
+        onConfirm={executeRestoreSnapshot}
+      />
+    </div>
+  );
+}
+
+interface SidebarContentProps {
+  snapshots: Snapshot[];
+  previewingSnapshot: Snapshot | null;
+  previewText: string;
+  setPreviewingSnapshot: (s: Snapshot | null) => void;
+  handlePreviewSnapshot: (s: Snapshot) => void;
+  handleRestoreSnapshotTrigger: (s: Snapshot) => void;
+  handleSaveVersionTrigger: () => void;
+  isSavingVersion: boolean;
+  isAiConfigured: boolean;
+  aiSummary: string;
+  isSummarizing: boolean;
+  handleAiSummarize: () => void;
+  aiSearchQuery: string;
+  setAiSearchQuery: (q: string) => void;
+  aiSearchLoading: boolean;
+  aiSearchResult: { matchedSnapshotId: string | null; rationale: string } | null;
+  handleAiVersionSearch: (e: React.FormEvent) => void;
+  isViewer: boolean;
+}
+
+function SidebarContent({
+  snapshots,
+  previewingSnapshot,
+  previewText,
+  setPreviewingSnapshot,
+  handlePreviewSnapshot,
+  handleRestoreSnapshotTrigger,
+  handleSaveVersionTrigger,
+  isSavingVersion,
+  isAiConfigured,
+  aiSummary,
+  isSummarizing,
+  handleAiSummarize,
+  aiSearchQuery,
+  setAiSearchQuery,
+  aiSearchLoading,
+  aiSearchResult,
+  handleAiVersionSearch,
+  isViewer,
+}: SidebarContentProps) {
+  return (
+    <div className="space-y-6">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
+            Version timeline
+          </span>
+          {!isViewer && (
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={handleSaveVersionTrigger}
+              disabled={isSavingVersion}
+              className="gap-1.5 focus-visible:ring-2"
+            >
+              <Save className="h-3.5 w-3.5" /> Checkpoint
+            </Button>
+          )}
+        </div>
+
+        {/* AI Semantic Search Input */}
+        {isAiConfigured && (
+          <div className="border-border bg-card space-y-2 rounded-xl border p-3 shadow-xs">
+            <span className="text-primary flex items-center gap-1 text-[9px] font-bold uppercase">
+              <Sparkles className="h-3 w-3" /> Semantic version search
+            </span>
+            <form onSubmit={handleAiVersionSearch} className="flex gap-1.5">
+              <input
+                type="text"
+                placeholder="Ask AI e.g. when did I write pricing..."
+                value={aiSearchQuery}
+                onChange={(e) => setAiSearchQuery(e.target.value)}
+                className="border-input bg-background/50 focus:border-primary focus:ring-primary/20 flex-1 rounded border px-2 py-1 text-[10px] outline-none focus:ring-1"
+              />
+              <Button
+                type="submit"
+                size="xs"
+                disabled={aiSearchLoading}
+                className="h-7 shrink-0 px-2"
+              >
+                <Search className="h-3 w-3" />
+              </Button>
+            </form>
+
+            {aiSearchResult && (
+              <div className="bg-primary/5 border-primary/10 animate-in fade-in space-y-1.5 rounded-lg border p-2 text-[10px] duration-100">
+                <div className="text-primary font-semibold">
+                  {aiSearchResult.matchedSnapshotId ? '✓ Found Match' : '▲ No Clear Match'}
+                </div>
+                <p className="text-muted-foreground leading-normal">{aiSearchResult.rationale}</p>
+
+                {aiSearchResult.matchedSnapshotId && (
+                  <div className="flex gap-2 pt-1">
+                    {snapshots.find((s) => s.id === aiSearchResult.matchedSnapshotId) && (
+                      <button
+                        onClick={() => {
+                          const match = snapshots.find(
+                            (s) => s.id === aiSearchResult.matchedSnapshotId,
+                          );
+                          if (match) handlePreviewSnapshot(match);
+                        }}
+                        className="text-primary text-[9px] font-bold hover:underline"
+                      >
+                        Preview Match
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {previewingSnapshot && (
+          <div className="border-primary/20 bg-primary/5 space-y-3 rounded-xl border p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-primary text-[10px] font-bold uppercase">Snapshot Preview</span>
+              <button
+                onClick={() => setPreviewingSnapshot(null)}
+                className="text-muted-foreground hover:text-foreground text-xs"
+              >
+                Close
+              </button>
+            </div>
+            <div className="truncate text-xs font-bold">{previewingSnapshot.label}</div>
+            <textarea
+              readOnly
+              value={previewText}
+              className="border-border bg-background/60 h-32 w-full resize-none rounded-lg border p-2.5 font-sans text-[11px] outline-none"
+            />
+            {!isViewer && (
+              <Button
+                onClick={() => handleRestoreSnapshotTrigger(previewingSnapshot)}
+                className="w-full py-1.5 text-xs"
+                size="sm"
+              >
+                Restore this version
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Snapshot listing timeline */}
+        <div
+          className="border-border bg-card max-h-[300px] space-y-3 overflow-y-auto rounded-xl border p-4"
+          role="list"
+        >
+          {snapshots.length === 0 ? (
+            <p className="text-muted-foreground py-4 text-center text-xs italic">
+              No checkpoints recorded.
+            </p>
+          ) : (
+            snapshots.map((snap) => {
+              const isMatched = aiSearchResult?.matchedSnapshotId === snap.id;
+              return (
+                <div
+                  key={snap.id}
+                  className={`border-border/20 space-y-1.5 border-b pb-2.5 text-xs transition-all duration-300 last:border-0 last:pb-0 ${
+                    isMatched
+                      ? 'bg-primary/5 border-primary/30 ring-primary/20 -mx-1 rounded-lg p-2 shadow-sm ring-1'
+                      : ''
+                  }`}
+                  role="listitem"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-foreground font-bold break-all">{snap.label}</span>
+                    <span className="text-muted-foreground shrink-0 font-mono text-[10px]">
+                      {new Date(snap.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="text-muted-foreground text-[10px]">
+                    Author: {snap.creator?.name || 'Anonymous'}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handlePreviewSnapshot(snap)}
+                      className="text-primary text-[10px] font-semibold hover:underline focus-visible:ring-1"
+                    >
+                      Preview
+                    </button>
+                    {!isViewer && (
+                      <button
+                        onClick={() => handleRestoreSnapshotTrigger(snap)}
+                        className="text-[10px] font-semibold text-violet-500 hover:underline focus-visible:ring-1"
+                      >
+                        Restore
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* AI Summarize Block in Timeline Gutter */}
+        {isAiConfigured && (
+          <div className="border-border bg-card mt-4 space-y-2 rounded-xl border p-3 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-primary flex items-center gap-1 text-[9px] font-bold uppercase">
+                <Sparkles className="h-3 w-3" /> AI document summary
+              </span>
+              <Button
+                onClick={handleAiSummarize}
+                disabled={isSummarizing}
+                size="xs"
+                className="h-6 gap-1 px-2 text-[9px]"
+                variant="outline"
+              >
+                <RefreshCw className={`h-2.5 w-2.5 ${isSummarizing ? 'animate-spin' : ''}`} />
+                {isSummarizing ? 'Summarizing...' : 'Summarize'}
+              </Button>
+            </div>
+
+            {aiSummary && (
+              <div className="bg-muted text-muted-foreground border-border/40 animate-in fade-in max-h-32 overflow-y-auto rounded-lg border p-2.5 text-[10px] leading-relaxed duration-150">
+                {aiSummary}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import {
@@ -14,10 +15,7 @@ const CollaboratorSchema = z.object({
 });
 
 // GET: Retrieve the list of collaborators for a specific document
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -30,6 +28,7 @@ export async function GET(
     const collaborators = await getCollaboratorsSecured(userId, documentId);
     return NextResponse.json(collaborators);
   } catch (e: any) {
+    console.error('[COLLAB API DEBUG] getCollaboratorsSecured error:', e.name, e.message, e.stack);
     if (e instanceof ForbiddenError) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
@@ -39,10 +38,7 @@ export async function GET(
 }
 
 // POST: Add a new collaborator or update their role (Only OWNER can perform this)
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -63,7 +59,7 @@ export async function POST(
   if (!parseResult.success) {
     return NextResponse.json(
       { error: 'Invalid payload', details: parseResult.error.flatten().fieldErrors },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -88,7 +84,7 @@ export async function POST(
 // DELETE: Remove a collaborator (Only OWNER can perform this)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await auth();
   if (!session?.user) {

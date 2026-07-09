@@ -39,7 +39,7 @@ export const SyncPayloadSchema = z.object({
     .array(
       z.string().max(MAX_UPDATE_BASE64_LENGTH, {
         message: `Individual update exceeds maximum size of ${MAX_UPDATE_BASE64_LENGTH} characters`,
-      })
+      }),
     )
     .max(MAX_UPDATES_PER_SYNC, {
       message: `Cannot send more than ${MAX_UPDATES_PER_SYNC} updates per request`,
@@ -58,6 +58,10 @@ export const SnapshotCreateSchema = z.object({
     })
     .optional()
     .default(''),
+  /** Base64-encoded Y.Doc state from the client. When provided, the server
+   *  uses this authoritative state instead of rebuilding from DB update logs,
+   *  which avoids race conditions with async WebSocket persistence. */
+  state: z.string().optional(),
 });
 
 /** Schema for WebSocket sync messages. */

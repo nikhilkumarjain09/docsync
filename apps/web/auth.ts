@@ -1,4 +1,5 @@
 import NextAuth from 'next-auth';
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { db } from '@docsync/db';
 import { authConfig } from './auth.config';
@@ -18,21 +19,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
     Credentials({
       async authorize(credentials) {
+        console.log('[AUTH DEBUG] authorize callback received credentials:', credentials);
         const parsedCredentials = z
           .object({ email: z.string().email(), password: z.string().min(6) })
           .safeParse(credentials);
 
         if (!parsedCredentials.success) {
+          console.log('[AUTH DEBUG] authorize parsing failed:', parsedCredentials.error.format());
           return null;
         }
 
         const { email, password } = parsedCredentials.data;
         const user = await db.user.findUnique({ where: { email } });
+        console.log(
+          '[AUTH DEBUG] authorize found user:',
+          user ? { id: user.id, email: user.email } : null,
+        );
         if (!user || !user.hashedPassword) {
           return null;
         }
 
         const passwordsMatch = await bcrypt.compare(password, user.hashedPassword);
+        console.log('[AUTH DEBUG] authorize passwords match:', passwordsMatch);
         if (passwordsMatch) {
           return {
             id: user.id,

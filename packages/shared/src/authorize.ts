@@ -1,4 +1,4 @@
-import { db } from '@docsync/db';
+import { db, runWithUserContext } from '@docsync/db';
 
 export type DocumentRole = 'OWNER' | 'EDITOR' | 'VIEWER';
 
@@ -8,16 +8,23 @@ export type DocumentRole = 'OWNER' | 'EDITOR' | 'VIEWER';
  */
 export async function getDocumentRole(
   userId: string,
-  documentId: string
+  documentId: string,
 ): Promise<DocumentRole | null> {
-  const collaborator = await db.documentCollaborator.findUnique({
-    where: {
-      documentId_userId: {
-        documentId,
-        userId,
-      },
-    },
-  });
+  try {
+    const collaborator = await runWithUserContext(userId, async (tx) => {
+      return tx.documentCollaborator.findUnique({
+        where: {
+          documentId_userId: {
+            documentId,
+            userId,
+          },
+        },
+      });
+    });
 
-  return collaborator ? (collaborator.role as DocumentRole) : null;
+    return collaborator ? (collaborator.role as DocumentRole) : null;
+  } catch (err) {
+    // Return null if RLS context query fails (e.g. invalid user format or blocked)
+    return null;
+  }
 }

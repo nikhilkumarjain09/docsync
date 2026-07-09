@@ -18,6 +18,7 @@ export const metadata: Metadata = {
 };
 
 import { SessionProvider } from 'next-auth/react';
+import { Toaster } from 'sonner';
 
 export default function RootLayout({
   children,
@@ -25,9 +26,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
+    >
       <body className="flex min-h-full flex-col" suppressHydrationWarning>
-        <SessionProvider>{children}</SessionProvider>
+        <SessionProvider>
+          {children}
+          <Toaster position="bottom-right" theme="system" closeButton richColors />
+        </SessionProvider>
       </body>
     </html>
   );

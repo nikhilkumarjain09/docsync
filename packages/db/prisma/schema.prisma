@@ -26,6 +26,7 @@ model User {
   ownedDocuments Document[]             @relation("DocumentOwner")
   updatesCreated DocumentUpdateLog[]    @relation("UpdateCreator")
   snapshots      DocumentSnapshot[]     @relation("SnapshotCreator")
+  favorites      FavoriteDocument[]
 }
 
 model Document {
@@ -35,11 +36,13 @@ model Document {
   owner           User                   @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   latestSnapshot  Bytes? // Y.encodeStateAsUpdate bytea checkpoint
   snapshotVersion Int                    @default(0)
+  deletedAt       DateTime?
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
   collaborators   DocumentCollaborator[]
   updateLogs      DocumentUpdateLog[]
   snapshots       DocumentSnapshot[]
+  favoritedBy     FavoriteDocument[]
 }
 
 model DocumentCollaborator {
@@ -78,4 +81,14 @@ model DocumentSnapshot {
   createdAt  DateTime @default(now())
 
   @@index([documentId])
+}
+
+model FavoriteDocument {
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@id([userId, documentId])
 }
