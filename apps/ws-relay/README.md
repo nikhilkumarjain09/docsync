@@ -38,7 +38,31 @@ pnpm --filter ws-relay dev
 
 ## Build & deploy
 
+### Local Build
+
 ```bash
 pnpm --filter ws-relay build
 pnpm --filter ws-relay start
 ```
+
+### Deploying to Fly.io
+
+1. Ensure you have the `flyctl` CLI installed and authenticated:
+   ```bash
+   fly auth login
+   ```
+
+2. Initialize/deploy the application using the included `fly.toml` config. Run this command from the monorepo root (where the build context is):
+   ```bash
+   fly launch --config apps/ws-relay/fly.toml --dockerfile apps/ws-relay/Dockerfile
+   ```
+
+3. Configure environment secrets on Fly.io (must match `apps/web/` environment):
+   ```bash
+   fly secrets set DATABASE_URL="your-postgres-db-url" AUTH_SECRET="your-nextauth-auth-secret"
+   ```
+
+4. Deploy/deploy updates:
+   ```bash
+   fly deploy --config apps/ws-relay/fly.toml --dockerfile apps/ws-relay/Dockerfile
+   ```

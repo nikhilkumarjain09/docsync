@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
@@ -28,8 +30,8 @@
     "@docsync/shared": "workspace:*",
     "@tiptap/core": "^3.27.3",
     "@tiptap/extension-bubble-menu": "^3.27.3",
-    "@tiptap/extension-collaboration": "^3.27.3",
-    "@tiptap/extension-collaboration-cursor": "^2.26.2",
+    "@tiptap/extension-collaboration": "^2.27.2",
+    "@tiptap/extension-collaboration-cursor": "^2.27.2",
     "@tiptap/extension-highlight": "^3.27.3",
     "@tiptap/extension-link": "^3.27.3",
     "@tiptap/extension-placeholder": "^3.27.3",
@@ -56,6 +58,7 @@
     "yjs": "^13.6.31"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^20",
@@ -68,6 +71,7 @@
     "prettier": "^3.9.4",
     "prettier-plugin-tailwindcss": "^0.8.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

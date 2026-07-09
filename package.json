@@ -9,6 +9,7 @@
     "build": "pnpm --filter web build && pnpm --filter ws-relay build",
     "lint": "pnpm --filter web lint && pnpm --filter ws-relay lint",
     "test": "pnpm --filter web test",
+    "test:e2e": "pnpm --filter web test:e2e",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -23,6 +24,10 @@
     "concurrently": "^9.1.2",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0"
+  },
+  "overrides": {
+    "yjs": "^13.6.31",
+    "y-prosemirror": "^1.2.12"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

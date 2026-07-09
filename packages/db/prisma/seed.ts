@@ -13,22 +13,22 @@ async function main() {
   await prisma.document.deleteMany();
   await prisma.user.deleteMany();
 
-  const alicePassword = await bcrypt.hash('alice123', 10);
-  const bobPassword = await bcrypt.hash('bob123', 10);
+  const nikhilPassword = await bcrypt.hash('Nikhil@12', 10);
+  const mahimaPassword = await bcrypt.hash('Mahima@12', 10);
 
   const alice = await prisma.user.create({
     data: {
-      email: 'alice@docsync.dev',
-      name: 'Alice Vance',
-      hashedPassword: alicePassword,
+      email: 'nikhil.wevois@gmail.com',
+      name: 'Nikhil Jain',
+      hashedPassword: nikhilPassword,
     },
   });
 
   const bob = await prisma.user.create({
     data: {
-      email: 'bob@docsync.dev',
-      name: 'Bob Vance',
-      hashedPassword: bobPassword,
+      email: 'jainmahima922@gmail.com',
+      name: 'Mahima Jain',
+      hashedPassword: mahimaPassword,
     },
   });
 

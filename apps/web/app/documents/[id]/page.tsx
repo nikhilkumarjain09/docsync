@@ -136,6 +136,71 @@ function EditorWorkspace({ documentId, userId, userName }: { documentId: string;
   const { doc, provider, content, synced, connectionStatus, awareness, broadcastUpdate } = useYDoc(documentId);
   const router = useRouter();
 
+  if (!synced || !doc || !content || !awareness || !provider) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-radial from-background to-muted/30">
+        <div className="text-center space-y-2">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
+          <p className="text-sm text-muted-foreground animate-pulse">Hydrating collaborative document...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <EditorWorkspaceContent
+      documentId={documentId}
+      userId={userId}
+      userName={userName}
+      doc={doc}
+      provider={provider}
+      content={content}
+      connectionStatus={connectionStatus}
+      awareness={awareness}
+      broadcastUpdate={broadcastUpdate}
+    />
+  );
+}
+
+function EditorWorkspaceContent({
+  documentId,
+  userId,
+  userName,
+  doc,
+  provider,
+  content,
+  connectionStatus,
+  awareness,
+  broadcastUpdate,
+}: {
+  documentId: string;
+  userId: string;
+  userName: string;
+  doc: any;
+  provider: any;
+  content: any;
+  connectionStatus: any;
+  awareness: any;
+  broadcastUpdate: any;
+}) {
+  const router = useRouter();
+
+  // Capture stable references to prevent crashes during the React unmount render pass
+  const stableDocRef = useRef(doc);
+  const stableContentRef = useRef(content);
+  const stableProviderRef = useRef(provider);
+  const stableAwarenessRef = useRef(awareness);
+
+  if (doc) stableDocRef.current = doc;
+  if (content) stableContentRef.current = content;
+  if (provider) stableProviderRef.current = provider;
+  if (awareness) stableAwarenessRef.current = awareness;
+
+  const stableDoc = stableDocRef.current;
+  const stableContent = stableContentRef.current;
+  const stableProvider = stableProviderRef.current;
+  const stableAwareness = stableAwarenessRef.current;
+
   // Local/UI states
   const [currentUserRole, setCurrentUserRole] = useState<'OWNER' | 'EDITOR' | 'VIEWER' | null>(null);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
@@ -219,11 +284,9 @@ function EditorWorkspace({ documentId, userId, userName }: { documentId: string;
   };
 
   useEffect(() => {
-    if (synced) {
-      loadCollaborators();
-      loadSnapshots();
-    }
-  }, [synced, documentId]);
+    loadCollaborators();
+    loadSnapshots();
+  }, [documentId]);
 
   // Announce status changes
   useEffect(() => {
@@ -247,10 +310,10 @@ function EditorWorkspace({ documentId, userId, userName }: { documentId: string;
 
   // Presence awareness sync
   useEffect(() => {
-    if (!awareness) return;
+    if (!stableAwareness) return;
 
     const handleAwarenessChange = () => {
-      const states = Array.from(awareness.getStates().entries()) as Array<[number, any]>;
+      const states = Array.from(stableAwareness.getStates().entries()) as Array<[number, any]>;
       const otherPeers = states
         .filter(([clientId, state]) => state.user && state.user.userId !== userId)
         .map(([clientId, state]) => ({
@@ -261,19 +324,19 @@ function EditorWorkspace({ documentId, userId, userName }: { documentId: string;
     };
 
     const userColor = getUserColor(userId);
-    awareness.setLocalStateField('user', {
+    stableAwareness.setLocalStateField('user', {
       userId,
       name: userName,
       color: userColor,
     });
 
-    awareness.on('change', handleAwarenessChange);
+    stableAwareness.on('change', handleAwarenessChange);
     handleAwarenessChange();
 
     return () => {
-      awareness.off('change', handleAwarenessChange);
+      stableAwareness.off('change', handleAwarenessChange);
     };
-  }, [awareness, userId, userName]);
+  }, [stableAwareness, userId, userName]);
 
   // ─── Tiptap Editor Core Instantiation ─────────────────────────────────
   const editor = useEditor({
@@ -282,11 +345,11 @@ function EditorWorkspace({ documentId, userId, userName }: { documentId: string;
         history: false, // Collaboration handles undo/redo
       } as any),
       Collaboration.configure({
-        document: doc || undefined,
-        fragment: content || undefined,
+        document: stableDoc || undefined,
+        fragment: stableContent || undefined,
       }),
       CollaborationCursor.configure({
-        provider: provider || undefined,
+        provider: (stableProvider && stableAwareness) ? Object.assign(Object.create(stableProvider), { awareness: stableAwareness }) : { awareness: {}, doc: {} } as any,
         user: {
           name: userName,
           color: getUserColor(userId),
@@ -1175,14 +1238,7 @@ function EditorWorkspace({ documentId, userId, userName }: { documentId: string;
             )}
 
             {/* ProseMirror Editor Canvas */}
-            {!synced ? (
-              <div className="flex h-64 flex-col items-center justify-center space-y-2">
-                <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
-                <p className="text-xs text-muted-foreground">Hydrating collaborative document...</p>
-              </div>
-            ) : (
-              <EditorContent editor={editor} />
-            )}
+            <EditorContent editor={editor} />
           </div>
 
           {/* Active Collaborators Presence indicator bar */}

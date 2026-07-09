@@ -297,8 +297,15 @@ export class SyncScheduler {
     this.setStatus('syncing');
 
     try {
-      const pending = await getPendingUpdates(this.documentId);
-      if (pending.length > 0) {
+      while (true) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+          break;
+        }
+        const pending = await getPendingUpdates(this.documentId);
+        if (pending.length === 0) {
+          break;
+        }
+
         console.log(`[SyncScheduler] Draining outbox: pushing ${pending.length} pending updates.`);
         
         for (const item of pending) {
@@ -313,8 +320,8 @@ export class SyncScheduler {
           // Clear outbox item
           await removeUpdates([item.id]);
         }
-        console.log('[SyncScheduler] Outbox successfully drained.');
       }
+      console.log('[SyncScheduler] Outbox successfully drained.');
       this.setStatus('synced');
     } catch (e: any) {
       console.error('[SyncScheduler] Failed to drain outbox:', e.message);

@@ -61,18 +61,11 @@ export function useYDoc(documentId: string): UseYDocResult {
     });
 
     // 3. Set up listener to track local hydration completion
-    const handleSynced = () => {
+    inst.provider.whenSynced.then(() => {
       console.log(`[useYDoc] Hydration complete from IndexedDB for document: ${documentId}`);
       setSynced(true);
       scheduler.triggerSync();
-    };
-
-    inst.provider.on('synced', handleSynced);
-
-    if (inst.provider.synced) {
-      setSynced(true);
-      scheduler.triggerSync();
-    }
+    });
 
     // 4. Teardown logic
     return () => {
@@ -80,14 +73,13 @@ export function useYDoc(documentId: string): UseYDocResult {
       schedulerRef.current = null;
       unsubscribeStatus();
       scheduler.stop();
-      inst.provider.off('synced', handleSynced);
       inst.destroy();
       setInstance(null);
       setSynced(false);
       setConnectionStatus('offline');
       setAwareness(null);
     };
-  }, [documentId, sessionStatus, session]);
+  }, [documentId, sessionStatus, session?.user?.id]);
 
   // Wrapper function to trigger WebSocket broadcasts
   const broadcastUpdate = (update: string, id: string) => {

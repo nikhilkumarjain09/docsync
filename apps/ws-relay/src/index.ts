@@ -236,7 +236,8 @@ wss.on('connection', async (ws: WebSocket, request: any, context: { documentId: 
     // ─── Layer 1: Rate limiting ──────────────────────────────────────
     // Check the token bucket BEFORE parsing. This ensures a flood of
     // tiny valid messages can't exhaust CPU on JSON.parse/Yjs operations.
-    if (!clientCtx.rateLimiter.consume()) {
+    const disableRateLimit = process.env.DISABLE_RATE_LIMIT === 'true';
+    if (!disableRateLimit && !clientCtx.rateLimiter.consume()) {
       rateLimitWarnings++;
       if (rateLimitWarnings % 50 === 1) {
         console.warn(`[ws-relay] Rate limiting user=${userId} doc=${documentId} (${rateLimitWarnings} messages throttled)`);

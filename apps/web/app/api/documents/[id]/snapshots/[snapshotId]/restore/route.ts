@@ -38,8 +38,34 @@ export async function POST(
       return NextResponse.json({ error: 'Snapshot not found' }, { status: 404 });
     }
 
-    // 3. Hydrate target document state from snapshot to read its text
-    //    Wrapped in try/catch — a corrupt snapshot should return 500, not crash.
+    // Helper function to recursively clone Yjs XML nodes from one document to another
+    function cloneNode(node: any): any {
+      if (!node) return node;
+      if (node instanceof Y.XmlText) {
+        const text = new Y.XmlText();
+        text.insert(0, node.toString());
+        return text;
+      } else if (node instanceof Y.XmlElement) {
+        const el = new Y.XmlElement(node.nodeName);
+        // Copy attributes
+        const attrs = node.getAttributes();
+        if (attrs) {
+          for (const [k, v] of Object.entries(attrs)) {
+            el.setAttribute(k, v as string);
+          }
+        }
+        // Copy children recursively using node.length and .get(i)
+        const childrenList: any[] = [];
+        for (let i = 0; i < node.length; i++) {
+          childrenList.push(node.get(i));
+        }
+        el.insert(0, childrenList.map(cloneNode));
+        return el;
+      }
+      return node;
+    }
+
+    // 3. Hydrate target document state from snapshot
     const targetDoc = new Y.Doc();
     try {
       Y.applyUpdate(targetDoc, new Uint8Array(snapshot.state));
@@ -48,9 +74,7 @@ export async function POST(
       console.error(`[RestoreRoute] Corrupt snapshot state for ${snapshotId}: ${yErr.message}`);
       return NextResponse.json({ error: 'Snapshot data is corrupt and cannot be restored' }, { status: 500 });
     }
-    const targetTextFragment = targetDoc.getXmlFragment('default').get(0) as Y.Text;
-    const targetText = targetTextFragment ? targetTextFragment.toString() : '';
-    targetDoc.destroy();
+    const targetFragment = targetDoc.getXmlFragment('default');
 
     // 4. Fetch all current database logs to rebuild the live document state
     const updateLogs = await runWithUserContext(userId, async (tx) => {
@@ -70,24 +94,26 @@ export async function POST(
       }
     }
 
-    // 5. Compute forward replacement update to match target text without breaking concurrent edits
+    // 5. Compute forward replacement update to match target fragment structure
     let restoreUpdateBytes: Uint8Array | null = null;
     liveDoc.on('update', (update) => {
       restoreUpdateBytes = update;
     });
 
-    const liveTextFragment = liveDoc.getXmlFragment('default').get(0) as Y.Text;
-    if (liveTextFragment) {
-      liveDoc.transact(() => {
-        liveTextFragment.delete(0, liveTextFragment.length);
-        liveTextFragment.insert(0, targetText);
-      });
-    } else {
-      liveDoc.transact(() => {
-        const newText = new Y.Text(targetText);
-        liveDoc.getXmlFragment('default').insert(0, [newText as any]);
-      });
-    }
+    const liveFragment = liveDoc.getXmlFragment('default');
+    liveDoc.transact(() => {
+      // 1. Clear all children in the live fragment
+      liveFragment.delete(0, liveFragment.length);
+      // 2. Clone and insert all children from the target snapshot fragment using a loop
+      const childrenList: any[] = [];
+      for (let i = 0; i < targetFragment.length; i++) {
+        childrenList.push(targetFragment.get(i));
+      }
+      const clonedChildren = childrenList.map(cloneNode);
+      liveFragment.insert(0, clonedChildren);
+    });
+
+    targetDoc.destroy();
     liveDoc.destroy();
 
     if (!restoreUpdateBytes) {

@@ -24,9 +24,9 @@ export const MAX_SYNC_PAYLOAD_BYTES = 300 * 1024;
 /** Token bucket rate limiter defaults for WebSocket connections. */
 export const RATE_LIMIT = {
   /** Maximum tokens (burst capacity). */
-  MAX_TOKENS: 30,
+  MAX_TOKENS: 100,
   /** Tokens replenished per second. */
-  REFILL_RATE: 10,
+  REFILL_RATE: 50,
   /** Interval in ms between refills. */
   REFILL_INTERVAL_MS: 1000,
 } as const;
