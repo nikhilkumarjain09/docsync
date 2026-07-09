@@ -11,7 +11,7 @@ export async function getDocumentRole(
   documentId: string,
 ): Promise<DocumentRole | null> {
   try {
-    const collaborator = await runWithUserContext(userId, async (tx) => {
+    const collaborator = await runWithUserContext(userId, async (tx: any) => {
       return tx.documentCollaborator.findUnique({
         where: {
           documentId_userId: {
