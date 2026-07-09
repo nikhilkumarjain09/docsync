@@ -5,12 +5,7 @@ import * as dotenv from 'dotenv';
 import * as Y from 'yjs';
 import { decode } from 'next-auth/jwt';
 import { db, runWithUserContext } from '@docsync/db';
-import {
-  getDocumentRole,
-  MAX_UPDATE_BYTES,
-  RATE_LIMIT,
-  WsMessageSchema,
-} from '@docsync/shared';
+import { getDocumentRole, MAX_UPDATE_BYTES, RATE_LIMIT, WsMessageSchema } from '@docsync/shared';
 
 // Load environment variables
 dotenv.config();
@@ -86,7 +81,9 @@ const wss = new WebSocketServer({
 });
 
 console.log(`[ws-relay] Initializing WebSocket relay server on port ${PORT}...`);
-console.log(`[ws-relay] Security: maxPayload=${MAX_UPDATE_BYTES + 4096}B, rate=${RATE_LIMIT.MAX_TOKENS}tok/${RATE_LIMIT.REFILL_RATE}/s`);
+console.log(
+  `[ws-relay] Security: maxPayload=${MAX_UPDATE_BYTES + 4096}B, rate=${RATE_LIMIT.MAX_TOKENS}tok/${RATE_LIMIT.REFILL_RATE}/s`,
+);
 
 // Handle standard HTTP Upgrade to WebSocket handshake
 server.on('upgrade', async (request, socket, head) => {
@@ -144,7 +141,9 @@ server.on('upgrade', async (request, socket, head) => {
     // Verify collaborator role on database
     const role = await getDocumentRole(userId, documentId);
     if (!role) {
-      console.log(`[ws-relay] Upgrade rejected: User ${userId} is not a collaborator on: ${documentId}`);
+      console.log(
+        `[ws-relay] Upgrade rejected: User ${userId} is not a collaborator on: ${documentId}`,
+      );
       socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
       socket.destroy();
       return;
@@ -162,164 +161,197 @@ server.on('upgrade', async (request, socket, head) => {
 });
 
 // Handle successful WebSocket connection
-wss.on('connection', async (ws: WebSocket, request: any, context: { documentId: string; userId: string; role: string }) => {
-  const { documentId, userId, role } = context;
+wss.on(
+  'connection',
+  async (
+    ws: WebSocket,
+    request: any,
+    context: { documentId: string; userId: string; role: string },
+  ) => {
+    const { documentId, userId, role } = context;
 
-  console.log(`[ws-relay] Client connected: user=${userId}, role=${role}, doc=${documentId}`);
+    console.log(`[ws-relay] Client connected: user=${userId}, role=${role}, doc=${documentId}`);
 
-  // Create room context if not existing
-  if (!rooms.has(documentId)) {
-    rooms.set(documentId, new Set());
-  }
-
-  const clientCtx: ClientContext = {
-    ws,
-    userId,
-    role,
-    rateLimiter: new TokenBucket(RATE_LIMIT.MAX_TOKENS, RATE_LIMIT.REFILL_RATE),
-  };
-  rooms.get(documentId)!.add(clientCtx);
-
-  // Track rate-limit warnings to avoid log spam
-  let rateLimitWarnings = 0;
-
-  // Initialize helper to send JSON messages
-  const sendJson = (msg: any) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(msg));
+    // Create room context if not existing
+    if (!rooms.has(documentId)) {
+      rooms.set(documentId, new Set());
     }
-  };
 
-  try {
-    // 1. Hydrate the document state from the Postgres log
-    // We run this under user context transaction to enforce Postgres RLS
-    const updateLogs = await runWithUserContext(userId, async (tx) => {
-      return tx.documentUpdateLog.findMany({
-        where: { documentId },
-        orderBy: { createdAt: 'asc' },
-      });
-    });
+    const clientCtx: ClientContext = {
+      ws,
+      userId,
+      role,
+      rateLimiter: new TokenBucket(RATE_LIMIT.MAX_TOKENS, RATE_LIMIT.REFILL_RATE),
+    };
+    rooms.get(documentId)!.add(clientCtx);
 
-    // Merge logs into a server-side document snapshot, with try/catch
-    // around Y.applyUpdate to gracefully handle any corrupted entries
-    const serverDoc = new Y.Doc();
-    for (const log of updateLogs) {
-      try {
-        Y.applyUpdate(serverDoc, new Uint8Array(log.update));
-      } catch (yErr: any) {
-        // Log the corrupt entry but continue — don't let one bad row
-        // prevent the entire document from loading.
-        console.warn(`[ws-relay] Skipped corrupt update log ${log.id}: ${yErr.message}`);
+    // Track rate-limit warnings to avoid log spam
+    let rateLimitWarnings = 0;
+
+    // Initialize helper to send JSON messages
+    const sendJson = (msg: any) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(msg));
       }
-    }
+    };
 
-    const docStateUpdate = Y.encodeStateAsUpdate(serverDoc);
-    const lastSeenLogId = updateLogs.length > 0 ? updateLogs[updateLogs.length - 1].id : null;
-
-    // Send the initialized state and cursor position to the client
-    sendJson({
-      type: 'init',
-      update: Buffer.from(docStateUpdate).toString('base64'),
-      lastSeenLogId,
-    });
-
-    console.log(`[ws-relay] Sent init state for document: ${documentId} (${updateLogs.length} updates compiled)`);
-    serverDoc.destroy();
-  } catch (e: any) {
-    console.error('[ws-relay] Failed to hydrate document for new client:', e.message);
-    ws.close(4002, 'Failed to initialize document state');
-    return;
-  }
-
-  // Handle incoming WebSocket messages
-  ws.on('message', async (data) => {
-    // ─── Layer 1: Rate limiting ──────────────────────────────────────
-    // Check the token bucket BEFORE parsing. This ensures a flood of
-    // tiny valid messages can't exhaust CPU on JSON.parse/Yjs operations.
-    const disableRateLimit = process.env.DISABLE_RATE_LIMIT === 'true';
-    if (!disableRateLimit && !clientCtx.rateLimiter.consume()) {
-      rateLimitWarnings++;
-      if (rateLimitWarnings % 50 === 1) {
-        console.warn(`[ws-relay] Rate limiting user=${userId} doc=${documentId} (${rateLimitWarnings} messages throttled)`);
-      }
-      return; // Silently drop the message
-    }
-
-    // ─── Layer 2: Size check (redundant with maxPayload but explicit) ─
-    const rawSize = typeof data === 'string' ? Buffer.byteLength(data) : (data as Buffer).length;
-    if (rawSize > MAX_UPDATE_BYTES + 4096) {
-      console.warn(`[ws-relay] Oversized message rejected: ${rawSize} bytes from user=${userId}`);
-      return;
-    }
-
-    // ─── Layer 3: JSON parse ─────────────────────────────────────────
-    let rawMsg: any;
     try {
-      rawMsg = JSON.parse(data.toString());
-    } catch (e) {
-      console.warn('[ws-relay] Invalid message format received.');
-      return;
-    }
+      // 1. Hydrate the document state from the Postgres log
+      // We run this under user context transaction to enforce Postgres RLS
+      const updateLogs = await runWithUserContext(userId, async (tx: any) => {
+        return tx.documentUpdateLog.findMany({
+          where: { documentId },
+          orderBy: { createdAt: 'asc' },
+        });
+      });
 
-    // ─── Layer 4: Schema validation ──────────────────────────────────
-    const parseResult = WsMessageSchema.safeParse(rawMsg);
-    if (!parseResult.success) {
-      console.warn(`[ws-relay] Message schema validation failed: ${parseResult.error.message}`);
-      return;
-    }
-    const msg = parseResult.data;
-
-    if (msg.type === 'sync') {
-      const { update: updateBase64, id: existingLogId } = msg;
-      
-      // Enforce read-only constraint for VIEWER role
-      if (role === 'VIEWER') {
-        console.warn(`[ws-relay] Security alert: VIEWER user ${userId} attempted to push edit on ${documentId}. Action blocked.`);
-        return; // Silently drop update
+      // Merge logs into a server-side document snapshot, with try/catch
+      // around Y.applyUpdate to gracefully handle any corrupted entries
+      const serverDoc = new Y.Doc();
+      for (const log of updateLogs) {
+        try {
+          Y.applyUpdate(serverDoc, new Uint8Array(log.update));
+        } catch (yErr: any) {
+          // Log the corrupt entry but continue — don't let one bad row
+          // prevent the entire document from loading.
+          console.warn(`[ws-relay] Skipped corrupt update log ${log.id}: ${yErr.message}`);
+        }
       }
 
+      const docStateUpdate = Y.encodeStateAsUpdate(serverDoc);
+      const lastSeenLogId = updateLogs.length > 0 ? updateLogs[updateLogs.length - 1].id : null;
+
+      // Send the initialized state and cursor position to the client
+      sendJson({
+        type: 'init',
+        update: Buffer.from(docStateUpdate).toString('base64'),
+        lastSeenLogId,
+      });
+
+      console.log(
+        `[ws-relay] Sent init state for document: ${documentId} (${updateLogs.length} updates compiled)`,
+      );
+      serverDoc.destroy();
+    } catch (e: any) {
+      console.error('[ws-relay] Failed to hydrate document for new client:', e.message);
+      ws.close(4002, 'Failed to initialize document state');
+      return;
+    }
+
+    // Handle incoming WebSocket messages
+    ws.on('message', async (data) => {
+      // ─── Layer 1: Rate limiting ──────────────────────────────────────
+      // Check the token bucket BEFORE parsing. This ensures a flood of
+      // tiny valid messages can't exhaust CPU on JSON.parse/Yjs operations.
+      const disableRateLimit = process.env.DISABLE_RATE_LIMIT === 'true';
+      if (!disableRateLimit && !clientCtx.rateLimiter.consume()) {
+        rateLimitWarnings++;
+        if (rateLimitWarnings % 50 === 1) {
+          console.warn(
+            `[ws-relay] Rate limiting user=${userId} doc=${documentId} (${rateLimitWarnings} messages throttled)`,
+          );
+        }
+        return; // Silently drop the message
+      }
+
+      // ─── Layer 2: Size check (redundant with maxPayload but explicit) ─
+      const rawSize = typeof data === 'string' ? Buffer.byteLength(data) : (data as Buffer).length;
+      if (rawSize > MAX_UPDATE_BYTES + 4096) {
+        console.warn(`[ws-relay] Oversized message rejected: ${rawSize} bytes from user=${userId}`);
+        return;
+      }
+
+      // ─── Layer 3: JSON parse ─────────────────────────────────────────
+      let rawMsg: any;
       try {
-        let logId = existingLogId;
+        rawMsg = JSON.parse(data.toString());
+      } catch (e) {
+        console.warn('[ws-relay] Invalid message format received.');
+        return;
+      }
 
-        // If the log was already saved (e.g. via Snapshot Restore REST API), skip database insertion
-        if (!logId) {
-          const updateBytes = Buffer.from(updateBase64, 'base64');
+      // ─── Layer 4: Schema validation ──────────────────────────────────
+      const parseResult = WsMessageSchema.safeParse(rawMsg);
+      if (!parseResult.success) {
+        console.warn(`[ws-relay] Message schema validation failed: ${parseResult.error.message}`);
+        return;
+      }
+      const msg = parseResult.data;
 
-          // ─── Layer 5: Yjs update validation ────────────────────────
-          // Verify the update bytes are a valid Yjs update by applying
-          // them to a throwaway doc. This catches adversarial/corrupt
-          // payloads before they reach the database.
-          const validationDoc = new Y.Doc();
-          try {
-            Y.applyUpdate(validationDoc, updateBytes);
-          } catch (yErr: any) {
-            console.warn(`[ws-relay] Rejected malformed Yjs update from user=${userId}: ${yErr.message}`);
-            validationDoc.destroy();
-            return;
-          }
-          validationDoc.destroy();
+      if (msg.type === 'sync') {
+        const { update: updateBase64, id: existingLogId } = msg;
 
-          // Persist update in database under sender context to respect RLS
-          const savedLog = await runWithUserContext(userId, async (tx) => {
-            return tx.documentUpdateLog.create({
-              data: {
-                documentId,
-                update: updateBytes,
-                createdBy: userId,
-              },
-            });
-          });
-          logId = savedLog.id;
+        // Enforce read-only constraint for VIEWER role
+        if (role === 'VIEWER') {
+          console.warn(
+            `[ws-relay] Security alert: VIEWER user ${userId} attempted to push edit on ${documentId}. Action blocked.`,
+          );
+          return; // Silently drop update
         }
 
-        // Broadcast update to all other connected clients in the same room
+        try {
+          let logId = existingLogId;
+
+          // If the log was already saved (e.g. via Snapshot Restore REST API), skip database insertion
+          if (!logId) {
+            const updateBytes = Buffer.from(updateBase64, 'base64');
+
+            // ─── Layer 5: Yjs update validation ────────────────────────
+            // Verify the update bytes are a valid Yjs update by applying
+            // them to a throwaway doc. This catches adversarial/corrupt
+            // payloads before they reach the database.
+            const validationDoc = new Y.Doc();
+            try {
+              Y.applyUpdate(validationDoc, updateBytes);
+            } catch (yErr: any) {
+              console.warn(
+                `[ws-relay] Rejected malformed Yjs update from user=${userId}: ${yErr.message}`,
+              );
+              validationDoc.destroy();
+              return;
+            }
+            validationDoc.destroy();
+
+            // Persist update in database under sender context to respect RLS
+            const savedLog = await runWithUserContext(userId, async (tx: any) => {
+              return tx.documentUpdateLog.create({
+                data: {
+                  documentId,
+                  update: updateBytes,
+                  createdBy: userId,
+                },
+              });
+            });
+            logId = savedLog.id;
+          }
+
+          // Broadcast update to all other connected clients in the same room
+          const roomClients = rooms.get(documentId);
+          if (roomClients) {
+            const broadcastMsg = JSON.stringify({
+              type: 'sync',
+              update: updateBase64,
+              createdBy: userId,
+              id: logId,
+            });
+
+            roomClients.forEach((client) => {
+              if (client.ws !== ws && client.ws.readyState === WebSocket.OPEN) {
+                client.ws.send(broadcastMsg);
+              }
+            });
+          }
+        } catch (err: any) {
+          console.error('[ws-relay] Database persist or broadcast failure:', err.message);
+        }
+      } else if (msg.type === 'awareness') {
+        // Relay transient presence state to all other room clients
         const roomClients = rooms.get(documentId);
         if (roomClients) {
           const broadcastMsg = JSON.stringify({
-            type: 'sync',
-            update: updateBase64,
-            createdBy: userId,
-            id: logId,
+            type: 'awareness',
+            update: msg.update,
+            userId,
           });
 
           roomClients.forEach((client) => {
@@ -328,45 +360,27 @@ wss.on('connection', async (ws: WebSocket, request: any, context: { documentId: 
             }
           });
         }
-      } catch (err: any) {
-        console.error('[ws-relay] Database persist or broadcast failure:', err.message);
       }
-    } else if (msg.type === 'awareness') {
-      // Relay transient presence state to all other room clients
+    });
+
+    // Handle socket closure
+    ws.on('close', () => {
+      console.log(`[ws-relay] Client disconnected: user=${userId}, doc=${documentId}`);
       const roomClients = rooms.get(documentId);
       if (roomClients) {
-        const broadcastMsg = JSON.stringify({
-          type: 'awareness',
-          update: msg.update,
-          userId,
-        });
-
-        roomClients.forEach((client) => {
-          if (client.ws !== ws && client.ws.readyState === WebSocket.OPEN) {
-            client.ws.send(broadcastMsg);
-          }
-        });
+        roomClients.delete(clientCtx);
+        if (roomClients.size === 0) {
+          rooms.delete(documentId);
+          console.log(`[ws-relay] Cleaned up empty room for document: ${documentId}`);
+        }
       }
-    }
-  });
+    });
 
-  // Handle socket closure
-  ws.on('close', () => {
-    console.log(`[ws-relay] Client disconnected: user=${userId}, doc=${documentId}`);
-    const roomClients = rooms.get(documentId);
-    if (roomClients) {
-      roomClients.delete(clientCtx);
-      if (roomClients.size === 0) {
-        rooms.delete(documentId);
-        console.log(`[ws-relay] Cleaned up empty room for document: ${documentId}`);
-      }
-    }
-  });
-
-  ws.on('error', (err) => {
-    console.error(`[ws-relay] WebSocket client error for user ${userId}:`, err.message);
-  });
-});
+    ws.on('error', (err) => {
+      console.error(`[ws-relay] WebSocket client error for user ${userId}:`, err.message);
+    });
+  },
+);
 
 // Boot server
 server.listen(PORT, HOST, () => {
