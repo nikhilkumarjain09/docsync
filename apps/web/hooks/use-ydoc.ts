@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createDocManager, SecuredDocInstance } from '../lib/crdt/doc-manager';
+import { SyncScheduler } from '../lib/sync/sync-scheduler';
 
 export interface UseYDocResult {
   doc: any | null;
@@ -30,10 +31,16 @@ export function useYDoc(documentId: string): UseYDocResult {
     const inst = createDocManager(documentId);
     setInstance(inst);
 
-    // 2. Set up listener to track hydration completion
+    // 2. Initialize and start the background sync scheduler
+    const scheduler = new SyncScheduler(documentId, inst.doc);
+    scheduler.start();
+
+    // 3. Set up listener to track hydration completion
     const handleSynced = () => {
       console.log(`[useYDoc] Hydration complete from IndexedDB for document: ${documentId}`);
       setSynced(true);
+      // Trigger a sync check as soon as local database is hydrated
+      scheduler.triggerSync();
     };
 
     inst.provider.on('synced', handleSynced);
@@ -41,11 +48,13 @@ export function useYDoc(documentId: string): UseYDocResult {
     // Check if the provider is already synced upon instantiation
     if (inst.provider.synced) {
       setSynced(true);
+      scheduler.triggerSync();
     }
 
-    // 3. Teardown logic
+    // 4. Teardown logic
     return () => {
       console.log(`[useYDoc] Unmounting, cleaning up listeners and provider for document: ${documentId}`);
+      scheduler.stop();
       inst.provider.off('synced', handleSynced);
       inst.destroy();
       setInstance(null);
