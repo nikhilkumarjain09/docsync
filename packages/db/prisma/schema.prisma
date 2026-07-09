@@ -55,13 +55,14 @@ model DocumentCollaborator {
 }
 
 model DocumentUpdateLog {
-  id         String   @id @default(cuid())
-  documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  update     Bytes // The Yjs state update bytea
-  createdBy  String
-  creator    User     @relation("UpdateCreator", fields: [createdBy], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
+  id                     String   @id @default(cuid())
+  documentId             String
+  document               Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  update                 Bytes // The Yjs state update bytea
+  createdBy              String
+  creator                User     @relation("UpdateCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  restoredFromSnapshotId String?
+  createdAt              DateTime @default(now())
 
   @@index([documentId])
 }

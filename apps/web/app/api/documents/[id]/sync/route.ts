@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { db, runWithUserContext } from '@docsync/db';
-import { getDocumentRole } from '@docsync/shared';
+import {
+  getDocumentRole,
+  SyncPayloadSchema,
+  MAX_SYNC_PAYLOAD_BYTES,
+  MAX_UPDATE_BYTES,
+} from '@docsync/shared';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // ─── Auth check ────────────────────────────────────────────────────
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -15,35 +21,60 @@ export async function POST(
   const { id: documentId } = await params;
   const userId = session.user.id;
 
-  // 1. Authorization check
+  // ─── Authorization check ──────────────────────────────────────────
   const role = await getDocumentRole(userId, documentId);
   if (!role) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
 
-  let body;
+  // ─── Layer 1: Payload size limit (transport-level) ────────────────
+  // Check content-length BEFORE reading the body to reject oversized
+  // payloads without allocating memory for them.
+  const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
+  if (contentLength > MAX_SYNC_PAYLOAD_BYTES) {
+    return NextResponse.json(
+      { error: `Payload too large. Maximum size is ${MAX_SYNC_PAYLOAD_BYTES} bytes.` },
+      { status: 413 }
+    );
+  }
+
+  // ─── Layer 2: JSON parse ──────────────────────────────────────────
+  let rawBody: unknown;
   try {
-    body = await request.json();
+    rawBody = await request.json();
   } catch (e) {
     return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
   }
 
-  const { updates, lastSeenLogId } = body as {
-    updates: string[];
-    lastSeenLogId: string | null;
-  };
+  // ─── Layer 3: Zod schema validation ───────────────────────────────
+  const parseResult = SyncPayloadSchema.safeParse(rawBody);
+  if (!parseResult.success) {
+    return NextResponse.json(
+      { error: 'Invalid payload', details: parseResult.error.flatten().fieldErrors },
+      { status: 400 }
+    );
+  }
 
-  // 2. Viewer restrictions
-  if (updates && updates.length > 0 && role === 'VIEWER') {
+  const { updates, lastSeenLogId } = parseResult.data;
+
+  // ─── Viewer restrictions ──────────────────────────────────────────
+  if (updates.length > 0 && role === 'VIEWER') {
     return NextResponse.json({ error: 'Viewers cannot push updates' }, { status: 403 });
   }
 
   try {
-    // 3. Process pushed updates under user context (enforcing RLS policies)
-    if (updates && updates.length > 0) {
+    // ─── Process pushed updates ───────────────────────────────────
+    if (updates.length > 0) {
       await runWithUserContext(userId, async (tx) => {
         for (const updateBase64 of updates) {
           const updateBytes = Buffer.from(updateBase64, 'base64');
+
+          // Layer 4: Individual update binary size check
+          if (updateBytes.length > MAX_UPDATE_BYTES) {
+            console.warn(`[SyncRoute] Rejected oversized update (${updateBytes.length}B) from ${userId}`);
+            continue; // Skip this update, process remaining
+          }
+
           await tx.documentUpdateLog.create({
             data: {
               documentId,
@@ -56,19 +87,21 @@ export async function POST(
       console.log(`[SyncRoute] Processed ${updates.length} updates pushed by ${userId} for document: ${documentId}`);
     }
 
-    // 4. Retrieve new updates to return to the client (Pull)
+    // ─── Retrieve new updates (Pull) ─────────────────────────────
     let cursorTime = new Date(0);
     if (lastSeenLogId) {
-      const lastLog = await db.documentUpdateLog.findUnique({
-        where: { id: lastSeenLogId },
+      // Use RLS-scoped transaction for cursor lookup too
+      const lastLog = await runWithUserContext(userId, async (tx) => {
+        return tx.documentUpdateLog.findUnique({
+          where: { id: lastSeenLogId },
+        });
       });
       if (lastLog) {
         cursorTime = lastLog.createdAt;
       }
     }
 
-    // Fetch all logs newer than lastSeenLogId
-    // We enforce user context via RLS transaction for pulling updates too
+    // Fetch all logs newer than lastSeenLogId under RLS context
     const newLogs = await runWithUserContext(userId, async (tx) => {
       return tx.documentUpdateLog.findMany({
         where: {

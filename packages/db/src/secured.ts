@@ -172,3 +172,154 @@ export async function createSnapshotSecured(
     return snapshot;
   });
 }
+
+/**
+ * Fetches all collaborators for a document after checking user collaborator status.
+ */
+export async function getCollaboratorsSecured(userId: string, documentId: string) {
+  await assertCollaborator(userId, documentId);
+
+  return db.documentCollaborator.findMany({
+    where: {
+      documentId,
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'asc',
+    },
+  });
+}
+
+/**
+ * Adds a new collaborator or updates an existing collaborator's role.
+ * Only the document OWNER is permitted to manage collaborators.
+ */
+export async function addOrUpdateCollaboratorSecured(
+  invitingUserId: string,
+  documentId: string,
+  inviteeEmail: string,
+  role: Role
+) {
+  // 1. Verify that the inviting user is indeed the document owner
+  const invitingCollaborator = await db.documentCollaborator.findUnique({
+    where: {
+      documentId_userId: {
+        documentId,
+        userId: invitingUserId,
+      },
+    },
+  });
+
+  if (!invitingCollaborator || invitingCollaborator.role !== Role.OWNER) {
+    throw new ForbiddenError('Unauthorized: Only document owners can manage collaborators');
+  }
+
+  // 2. Find the user being invited by email
+  const invitee = await db.user.findUnique({
+    where: {
+      email: inviteeEmail,
+    },
+  });
+
+  if (!invitee) {
+    throw new Error(`User with email "${inviteeEmail}" does not exist`);
+  }
+
+  // 3. Prevent an owner from changing their own role (to avoid orphaned documents)
+  if (invitee.id === invitingUserId && role !== Role.OWNER) {
+    // Check if there are other owners
+    const ownerCount = await db.documentCollaborator.count({
+      where: {
+        documentId,
+        role: Role.OWNER,
+      },
+    });
+    if (ownerCount <= 1) {
+      throw new Error('Cannot demote yourself: you are the only owner of this document');
+    }
+  }
+
+  // 4. Create or update the collaborator entry
+  return db.documentCollaborator.upsert({
+    where: {
+      documentId_userId: {
+        documentId,
+        userId: invitee.id,
+      },
+    },
+    update: {
+      role,
+    },
+    create: {
+      documentId,
+      userId: invitee.id,
+      role,
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+}
+
+/**
+ * Removes a collaborator from the document.
+ * Only the document OWNER is permitted to remove collaborators.
+ */
+export async function removeCollaboratorSecured(
+  ownerUserId: string,
+  documentId: string,
+  targetUserId: string
+) {
+  // 1. Verify that the deleting user is indeed the document owner
+  const ownerCollaborator = await db.documentCollaborator.findUnique({
+    where: {
+      documentId_userId: {
+        documentId,
+        userId: ownerUserId,
+      },
+    },
+  });
+
+  if (!ownerCollaborator || ownerCollaborator.role !== Role.OWNER) {
+    throw new ForbiddenError('Unauthorized: Only document owners can remove collaborators');
+  }
+
+  // 2. Prevent removing the owner if they are the only owner
+  if (targetUserId === ownerUserId) {
+    const ownerCount = await db.documentCollaborator.count({
+      where: {
+        documentId,
+        role: Role.OWNER,
+      },
+    });
+    if (ownerCount <= 1) {
+      throw new Error('Cannot remove yourself: you are the only owner of this document');
+    }
+  }
+
+  // 3. Delete the collaborator row
+  return db.documentCollaborator.delete({
+    where: {
+      documentId_userId: {
+        documentId,
+        userId: targetUserId,
+      },
+    },
+  });
+}
+

@@ -5,7 +5,12 @@ import * as dotenv from 'dotenv';
 import * as Y from 'yjs';
 import { decode } from 'next-auth/jwt';
 import { db, runWithUserContext } from '@docsync/db';
-import { getDocumentRole } from '@docsync/shared';
+import {
+  getDocumentRole,
+  MAX_UPDATE_BYTES,
+  RATE_LIMIT,
+  WsMessageSchema,
+} from '@docsync/shared';
 
 // Load environment variables
 dotenv.config();
@@ -19,12 +24,49 @@ if (!AUTH_SECRET) {
   process.exit(1);
 }
 
+// ─── Token Bucket Rate Limiter ───────────────────────────────────────────────
+// Prevents a single connection from flooding the relay with rapid-fire messages.
+// Each connection gets its own bucket with MAX_TOKENS capacity, refilled at
+// REFILL_RATE tokens per second.
+
+class TokenBucket {
+  private tokens: number;
+  private lastRefill: number;
+  private readonly maxTokens: number;
+  private readonly refillRate: number; // tokens per second
+
+  constructor(maxTokens: number, refillRate: number) {
+    this.maxTokens = maxTokens;
+    this.refillRate = refillRate;
+    this.tokens = maxTokens;
+    this.lastRefill = Date.now();
+  }
+
+  /**
+   * Attempt to consume one token. Returns true if allowed, false if rate-limited.
+   * Refills tokens based on elapsed time since last check.
+   */
+  consume(): boolean {
+    const now = Date.now();
+    const elapsed = (now - this.lastRefill) / 1000;
+    this.tokens = Math.min(this.maxTokens, this.tokens + elapsed * this.refillRate);
+    this.lastRefill = now;
+
+    if (this.tokens >= 1) {
+      this.tokens -= 1;
+      return true;
+    }
+    return false;
+  }
+}
+
 // Map to track active client rooms
 // Room ID (documentId) -> Set of active client connection contexts
 interface ClientContext {
   ws: WebSocket;
   userId: string;
   role: string;
+  rateLimiter: TokenBucket;
 }
 const rooms = new Map<string, Set<ClientContext>>();
 
@@ -34,10 +76,17 @@ const server = http.createServer((req, res) => {
   res.end('DocSync WS-Relay Server is active.\n');
 });
 
-// Create WebSocket server
-const wss = new WebSocketServer({ noServer: true });
+// Create WebSocket server with per-message size limit.
+// The `maxPayload` option rejects messages exceeding the threshold at the
+// transport layer, BEFORE the buffer is ever allocated — this is the primary
+// defense against OOM attacks via oversized payloads.
+const wss = new WebSocketServer({
+  noServer: true,
+  maxPayload: MAX_UPDATE_BYTES + 4096, // 256KB + overhead for JSON wrapper
+});
 
 console.log(`[ws-relay] Initializing WebSocket relay server on port ${PORT}...`);
+console.log(`[ws-relay] Security: maxPayload=${MAX_UPDATE_BYTES + 4096}B, rate=${RATE_LIMIT.MAX_TOKENS}tok/${RATE_LIMIT.REFILL_RATE}/s`);
 
 // Handle standard HTTP Upgrade to WebSocket handshake
 server.on('upgrade', async (request, socket, head) => {
@@ -123,8 +172,16 @@ wss.on('connection', async (ws: WebSocket, request: any, context: { documentId: 
     rooms.set(documentId, new Set());
   }
 
-  const clientCtx: ClientContext = { ws, userId, role };
+  const clientCtx: ClientContext = {
+    ws,
+    userId,
+    role,
+    rateLimiter: new TokenBucket(RATE_LIMIT.MAX_TOKENS, RATE_LIMIT.REFILL_RATE),
+  };
   rooms.get(documentId)!.add(clientCtx);
+
+  // Track rate-limit warnings to avoid log spam
+  let rateLimitWarnings = 0;
 
   // Initialize helper to send JSON messages
   const sendJson = (msg: any) => {
@@ -143,11 +200,18 @@ wss.on('connection', async (ws: WebSocket, request: any, context: { documentId: 
       });
     });
 
-    // Merge logs into a server-side document snapshot
+    // Merge logs into a server-side document snapshot, with try/catch
+    // around Y.applyUpdate to gracefully handle any corrupted entries
     const serverDoc = new Y.Doc();
-    updateLogs.forEach((log) => {
-      Y.applyUpdate(serverDoc, new Uint8Array(log.update));
-    });
+    for (const log of updateLogs) {
+      try {
+        Y.applyUpdate(serverDoc, new Uint8Array(log.update));
+      } catch (yErr: any) {
+        // Log the corrupt entry but continue — don't let one bad row
+        // prevent the entire document from loading.
+        console.warn(`[ws-relay] Skipped corrupt update log ${log.id}: ${yErr.message}`);
+      }
+    }
 
     const docStateUpdate = Y.encodeStateAsUpdate(serverDoc);
     const lastSeenLogId = updateLogs.length > 0 ? updateLogs[updateLogs.length - 1].id : null;
@@ -169,16 +233,43 @@ wss.on('connection', async (ws: WebSocket, request: any, context: { documentId: 
 
   // Handle incoming WebSocket messages
   ws.on('message', async (data) => {
-    let msg: any;
+    // ─── Layer 1: Rate limiting ──────────────────────────────────────
+    // Check the token bucket BEFORE parsing. This ensures a flood of
+    // tiny valid messages can't exhaust CPU on JSON.parse/Yjs operations.
+    if (!clientCtx.rateLimiter.consume()) {
+      rateLimitWarnings++;
+      if (rateLimitWarnings % 50 === 1) {
+        console.warn(`[ws-relay] Rate limiting user=${userId} doc=${documentId} (${rateLimitWarnings} messages throttled)`);
+      }
+      return; // Silently drop the message
+    }
+
+    // ─── Layer 2: Size check (redundant with maxPayload but explicit) ─
+    const rawSize = typeof data === 'string' ? Buffer.byteLength(data) : (data as Buffer).length;
+    if (rawSize > MAX_UPDATE_BYTES + 4096) {
+      console.warn(`[ws-relay] Oversized message rejected: ${rawSize} bytes from user=${userId}`);
+      return;
+    }
+
+    // ─── Layer 3: JSON parse ─────────────────────────────────────────
+    let rawMsg: any;
     try {
-      msg = JSON.parse(data.toString());
+      rawMsg = JSON.parse(data.toString());
     } catch (e) {
       console.warn('[ws-relay] Invalid message format received.');
       return;
     }
 
+    // ─── Layer 4: Schema validation ──────────────────────────────────
+    const parseResult = WsMessageSchema.safeParse(rawMsg);
+    if (!parseResult.success) {
+      console.warn(`[ws-relay] Message schema validation failed: ${parseResult.error.message}`);
+      return;
+    }
+    const msg = parseResult.data;
+
     if (msg.type === 'sync') {
-      const { update: updateBase64 } = msg;
+      const { update: updateBase64, id: existingLogId } = msg;
       
       // Enforce read-only constraint for VIEWER role
       if (role === 'VIEWER') {
@@ -187,18 +278,38 @@ wss.on('connection', async (ws: WebSocket, request: any, context: { documentId: 
       }
 
       try {
-        const updateBytes = Buffer.from(updateBase64, 'base64');
+        let logId = existingLogId;
 
-        // Persist update in database under sender context to respect RLS
-        const savedLog = await runWithUserContext(userId, async (tx) => {
-          return tx.documentUpdateLog.create({
-            data: {
-              documentId,
-              update: updateBytes,
-              createdBy: userId,
-            },
+        // If the log was already saved (e.g. via Snapshot Restore REST API), skip database insertion
+        if (!logId) {
+          const updateBytes = Buffer.from(updateBase64, 'base64');
+
+          // ─── Layer 5: Yjs update validation ────────────────────────
+          // Verify the update bytes are a valid Yjs update by applying
+          // them to a throwaway doc. This catches adversarial/corrupt
+          // payloads before they reach the database.
+          const validationDoc = new Y.Doc();
+          try {
+            Y.applyUpdate(validationDoc, updateBytes);
+          } catch (yErr: any) {
+            console.warn(`[ws-relay] Rejected malformed Yjs update from user=${userId}: ${yErr.message}`);
+            validationDoc.destroy();
+            return;
+          }
+          validationDoc.destroy();
+
+          // Persist update in database under sender context to respect RLS
+          const savedLog = await runWithUserContext(userId, async (tx) => {
+            return tx.documentUpdateLog.create({
+              data: {
+                documentId,
+                update: updateBytes,
+                createdBy: userId,
+              },
+            });
           });
-        });
+          logId = savedLog.id;
+        }
 
         // Broadcast update to all other connected clients in the same room
         const roomClients = rooms.get(documentId);
@@ -207,7 +318,7 @@ wss.on('connection', async (ws: WebSocket, request: any, context: { documentId: 
             type: 'sync',
             update: updateBase64,
             createdBy: userId,
-            id: savedLog.id,
+            id: logId,
           });
 
           roomClients.forEach((client) => {

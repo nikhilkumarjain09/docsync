@@ -128,3 +128,218 @@
     @apply font-sans;
   }
 }
+
+/* ─── Notion-Style Collaborative Editor Custom Styling ───────────────── */
+
+/* 1. Global ProseMirror Editor Dimensions */
+.ProseMirror {
+  outline: none;
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  font-size: 1rem;
+  max-width: 740px;
+  margin: 0 auto;
+}
+
+/* 2. Spacing / Vertical Rhythm (4-8px spacing between blocks) */
+.ProseMirror > * + * {
+  margin-top: 0.5rem !important;
+  margin-bottom: 0 !important;
+}
+
+/* Headings spacing overrides */
+.ProseMirror h1 {
+  font-size: 1.875rem;
+  font-weight: 800;
+  margin-top: 1.5rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
+.ProseMirror h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 1.25rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
+.ProseMirror h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 1rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
+/* Code blocks syntax highlighting style */
+.ProseMirror pre {
+  background: var(--muted);
+  border: 1px border-border;
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  overflow-x: auto;
+}
+
+/* List spacing */
+.ProseMirror ul, 
+.ProseMirror ol {
+  padding-left: 1.5rem;
+}
+
+.ProseMirror li {
+  margin-top: 0.25rem !important;
+}
+
+/* 3. Collapsible Toggle Block */
+div[data-type="toggle-block"] {
+  display: block;
+  border-left: 2px solid oklch(var(--primary) / 20%);
+  padding-left: 1rem;
+  margin-top: 0.5rem !important;
+}
+
+/* Chevron indicator design using pure CSS */
+div[data-type="toggle-block"] .toggle-chevron-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  background-color: transparent;
+  transition: all 200ms ease;
+}
+
+div[data-type="toggle-block"] .toggle-chevron-indicator::after {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-right: 2px solid var(--muted-foreground);
+  border-bottom: 2px solid var(--muted-foreground);
+  transform: rotate(-45deg);
+  transition: transform 200ms ease-in-out;
+  margin-right: 2px;
+}
+
+div[data-type="toggle-block"][data-open="true"] .toggle-chevron-indicator::after {
+  transform: rotate(45deg);
+  margin-bottom: 2px;
+  margin-right: 0;
+}
+
+div[data-type="toggle-block"] .toggle-chevron-indicator:hover {
+  background-color: var(--muted);
+}
+
+/* Expand/collapse transitions */
+div[data-type="toggle-block"][data-open="false"] > div[data-type="toggle-content"] {
+  max-height: 0px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  margin-top: 0 !important;
+}
+
+div[data-type="toggle-block"][data-open="true"] > div[data-type="toggle-content"] {
+  max-height: 2000px;
+  opacity: 1;
+  overflow: visible;
+}
+
+/* 4. Focused-Only Placeholder Text (Type '/' for commands) */
+.ProseMirror p.is-empty.is-editor-empty::before,
+.ProseMirror p.is-empty.is-focused::before {
+  color: var(--muted-foreground);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* 5. Collaborative Cursor Cursors Styling */
+.ProseMirror .collaboration-cursor__caret {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 2px solid;
+  border-right: 2px solid;
+  border-color: inherit;
+  word-break: normal;
+  pointer-events: none;
+}
+
+.ProseMirror .collaboration-cursor__label {
+  position: absolute;
+  top: -1.4em;
+  left: -2px;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: normal;
+  user-select: none;
+  color: #fff;
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Task lists (To-do list) styling */
+ul[data-type="taskList"] {
+  list-style: none;
+  padding: 0;
+}
+
+ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+ul[data-type="taskList"] li > label {
+  user-select: none;
+  margin-top: 0.2rem;
+}
+
+ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+
+ul[data-type="taskList"] input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+/* 6. Drag Handle & Plus Gutter Positioning */
+.global-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  opacity: 0;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+  cursor: grab;
+}
+
+.global-drag-handle:active {
+  cursor: grabbing;
+}
+
+.global-drag-handle:hover {
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+/* Show drag handle on block container hover */
+.ProseMirror-focused .global-drag-handle-active,
+.ProseMirror:hover .global-drag-handle-active {
+  opacity: 1;
+}
+

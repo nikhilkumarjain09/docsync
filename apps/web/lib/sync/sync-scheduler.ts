@@ -149,6 +149,20 @@ export class SyncScheduler {
   }
 
   /**
+   * Manually broadcast a pre-persisted update over WebSocket to all room peers.
+   */
+  public broadcastUpdate(base64Update: string, logId: string) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      console.log(`[SyncScheduler] Broadcasting pre-persisted sync update log: ${logId}`);
+      this.ws.send(JSON.stringify({
+        type: 'sync',
+        update: base64Update,
+        id: logId,
+      }));
+    }
+  }
+
+  /**
    * Clean up connections and listeners.
    */
   public stop() {

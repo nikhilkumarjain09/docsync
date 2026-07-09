@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createDocManager, SecuredDocInstance } from '../lib/crdt/doc-manager';
 import { SyncScheduler, SyncConnectionStatus } from '../lib/sync/sync-scheduler';
 import { useSession } from 'next-auth/react';
@@ -10,6 +10,7 @@ export interface UseYDocResult {
   synced: boolean;
   connectionStatus: SyncConnectionStatus;
   awareness: any | null;
+  broadcastUpdate: (update: string, id: string) => void;
 }
 
 /**
@@ -25,13 +26,16 @@ export function useYDoc(documentId: string): UseYDocResult {
   const [connectionStatus, setConnectionStatus] = useState<SyncConnectionStatus>('offline');
   const [instance, setInstance] = useState<SecuredDocInstance | null>(null);
   const [awareness, setAwareness] = useState<any | null>(null);
+  
+  // Keep stable reference to the sync scheduler for manual actions
+  const schedulerRef = useRef<SyncScheduler | null>(null);
 
   useEffect(() => {
     if (!documentId) {
       return;
     }
 
-    // Wait until NextAuth session state resolves (authenticated or unauthenticated)
+    // Wait until NextAuth session state resolves
     if (sessionStatus === 'loading') {
       return;
     }
@@ -47,6 +51,7 @@ export function useYDoc(documentId: string): UseYDocResult {
 
     // 2. Initialize and start the background sync scheduler
     const scheduler = new SyncScheduler(documentId, inst.doc, user);
+    schedulerRef.current = scheduler;
     setAwareness(scheduler.awareness);
     scheduler.start();
 
@@ -72,6 +77,7 @@ export function useYDoc(documentId: string): UseYDocResult {
     // 4. Teardown logic
     return () => {
       console.log(`[useYDoc] Unmounting, cleaning up listeners and provider for document: ${documentId}`);
+      schedulerRef.current = null;
       unsubscribeStatus();
       scheduler.stop();
       inst.provider.off('synced', handleSynced);
@@ -83,6 +89,13 @@ export function useYDoc(documentId: string): UseYDocResult {
     };
   }, [documentId, sessionStatus, session]);
 
+  // Wrapper function to trigger WebSocket broadcasts
+  const broadcastUpdate = (update: string, id: string) => {
+    if (schedulerRef.current) {
+      schedulerRef.current.broadcastUpdate(update, id);
+    }
+  };
+
   return {
     doc: instance?.doc ?? null,
     provider: instance?.provider ?? null,
@@ -90,6 +103,7 @@ export function useYDoc(documentId: string): UseYDocResult {
     synced,
     connectionStatus,
     awareness,
+    broadcastUpdate,
   };
 }
 export type { SecuredDocInstance, SyncConnectionStatus };
