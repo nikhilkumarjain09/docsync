@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { use, useState, useEffect, useRef } from 'react';
+import React, { use, useState, useEffect, useRef } from 'react';
 import { useYDoc } from '@/hooks/use-ydoc';
 import { Button } from '@/components/ui/button';
 import { useSession } from 'next-auth/react';
@@ -38,12 +38,9 @@ import GlobalDragHandle from 'tiptap-extension-global-drag-handle';
 // New Tiptap extensions
 import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
-import TextStyle from '@tiptap/extension-text-style';
+import { TextStyle } from '@tiptap/extension-text-style';
 import Color from '@tiptap/extension-color';
-import Table from '@tiptap/extension-table';
-import TableRow from '@tiptap/extension-table-row';
-import TableHeader from '@tiptap/extension-table-header';
-import TableCell from '@tiptap/extension-table-cell';
+import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 
 // Custom toggle and callout blocks
@@ -471,7 +468,7 @@ function EditorWorkspaceContent({
     {
       extensions: [
         StarterKit.configure({
-          history: false, // Collaboration handles undo/redo
+          undoRedo: false, // Collaboration handles undo/redo
         }),
         Collaboration.configure({
           document: stableDoc || undefined,
@@ -1373,7 +1370,7 @@ function EditorWorkspaceContent({
 
             {/* Notion Bubble Menu */}
             {editor && !isViewer && (
-              <BubbleMenu editor={editor} tippyOptions={{ duration: 150 }}>
+              <BubbleMenu editor={editor} {...({ tippyOptions: { duration: 150 } } as any)}>
                 <div className="border-border bg-background/95 animate-in zoom-in-95 flex max-w-[90vw] flex-wrap items-center gap-1 rounded-xl border p-1.5 shadow-xl backdrop-blur-md duration-100">
                   {/* AI Writing Assist Button */}
                   {isAiConfigured && (

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "pnpm --filter @docsync/db exec prisma generate && pnpm --filter @docsync/db build && pnpm --filter @docsync/shared build && next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
