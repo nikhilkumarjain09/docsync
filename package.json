@@ -6,8 +6,8 @@
     "dev": "concurrently -n web,relay -c blue,green \"pnpm --filter web dev\" \"pnpm --filter ws-relay dev\"",
     "dev:db": "docker compose up -d",
     "dev:all": "pnpm dev:db && pnpm dev",
-    "build": "pnpm --filter web build && pnpm --filter ws-relay build",
-    "lint": "pnpm --filter web lint && pnpm --filter ws-relay lint",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
     "test": "pnpm --filter web test",
     "test:e2e": "pnpm --filter web test:e2e",
     "prepare": "husky"
