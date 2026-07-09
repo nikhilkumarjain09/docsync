@@ -1,5 +1,5 @@
 {
-  "name": "docsync-ws-relay",
+  "name": "ws-relay",
   "version": "0.1.0",
   "private": true,
   "description": "Standalone WebSocket relay server for DocSync real-time collaboration",
@@ -10,7 +10,10 @@
     "start": "node dist/index.js",
     "lint": "eslint src/"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@docsync/db": "workspace:*",
+    "@docsync/shared": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^5.8.0",
     "tsx": "^4.19.0",

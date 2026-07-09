@@ -42,7 +42,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# ws-relay
-server/ws-relay/node_modules
-server/ws-relay/dist
-
+# monorepo ignores
+**/node_modules
+**/dist
+.next
+.turbo

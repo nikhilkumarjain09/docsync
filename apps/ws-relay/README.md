@@ -21,17 +21,24 @@ process** — not as a Next.js API route.
 
 This is a **deliberate architectural decision**, not an oversight.
 
+## Environment Variables WARNING
+
+> [!WARNING]
+> Both `apps/web/` and `apps/ws-relay/` require their own `.env` files.
+> You **MUST** ensure that `DATABASE_URL` and `AUTH_SECRET` match exactly across both configurations:
+> - If `DATABASE_URL` differs, they will point to different databases and updates won't synchronize.
+> - If `AUTH_SECRET` differs, JWT session verification on the WebSocket handshake will silently fail, rejecting all client connections.
+
 ## Getting started
 
 ```bash
-cd server/ws-relay
-npm install
-npm run dev    # starts relay with tsx --watch
+# From the workspace root:
+pnpm --filter ws-relay dev
 ```
 
 ## Build & deploy
 
 ```bash
-npm run build  # compiles TS → dist/
-npm start      # runs compiled JS (production)
+pnpm --filter ws-relay build
+pnpm --filter ws-relay start
 ```
