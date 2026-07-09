@@ -1,4 +1,5 @@
 'use server';
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { db } from '@docsync/db';
 import { signIn } from '@/auth';
@@ -46,6 +47,15 @@ export async function signUp(prevState: any, formData: FormData) {
 
     return { success: true };
   } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'digest' in error &&
+      typeof (error as any).digest === 'string' &&
+      (error as any).digest.startsWith('NEXT_REDIRECT')
+    ) {
+      throw error;
+    }
     console.error('Sign up error:', error);
     return { error: 'Something went wrong during sign up' };
   }

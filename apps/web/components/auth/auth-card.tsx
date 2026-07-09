@@ -5,39 +5,47 @@ import { useRouter } from 'next/navigation';
 import { logIn, signUp } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
+import { FileText, RefreshCw, Users, Shield } from 'lucide-react';
 
-// Minimalist single-continuous-stroke SVG line-art cat
-function LineArtCat({ className }: { className?: string }) {
+// Premium document synchronization card mockup graphic
+function AuthGraphic() {
   return (
-    <svg
-      viewBox="0 0 100 100"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <path
-        d="M25 65 
-           C25 55, 30 45, 42 45 
-           C48 35, 54 28, 52 28 
-           C50 28, 45 35, 45 40 
-           C45 42, 47 45, 49 45 
-           C54 45, 58 35, 56 35 
-           C54 35, 52 40, 52 45 
-           C52 50, 58 55, 62 55 
-           C68 55, 72 45, 68 40 
-           C66 38, 62 38, 62 44 
-           C62 50, 68 52, 75 45 
-           C82 38, 80 28, 70 32 
-           C60 36, 54 50, 56 65 
-           C58 78, 70 82, 78 78 
-           C86 74, 84 65, 78 70 
-           C72 74, 70 70, 72 65"
-      />
-    </svg>
+    <div className="relative flex w-full items-center justify-center py-4">
+      <div className="bg-primary/20 absolute inset-0 rounded-full blur-3xl" />
+      <div className="relative flex w-full max-w-[280px] flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-md">
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+            <span className="font-mono text-[10px] tracking-widest text-white/50 uppercase">
+              Sync Status
+            </span>
+          </div>
+          <RefreshCw
+            className="h-3.5 w-3.5 animate-spin text-indigo-400"
+            style={{ animationDuration: '4s' }}
+          />
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-white/10 p-2.5 text-white">
+            <FileText className="h-5 w-5 text-purple-300" />
+          </div>
+          <div className="flex-1 space-y-1">
+            <div className="h-2.5 w-24 rounded-sm bg-white/20" />
+            <div className="h-2 w-16 rounded-sm bg-white/10" />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between border-t border-white/10 pt-3 text-[10px] text-white/60">
+          <span className="flex items-center gap-1">
+            <Users className="h-3 w-3" /> 3 Online
+          </span>
+          <span className="flex items-center gap-1">
+            <Shield className="h-3 w-3 text-indigo-300" /> Secure
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -133,7 +141,7 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
       </div>
 
       <div className="flex w-full items-center justify-center py-6">
-        <LineArtCat className="h-40 w-40 text-white/95 drop-shadow-md" />
+        <AuthGraphic />
       </div>
 
       <div className="text-xs text-indigo-200/70">
@@ -211,7 +219,7 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
         <Button
           type="submit"
           disabled={loginIsPending}
-          className="w-full rounded-xl py-6 text-sm font-semibold"
+          className="w-full rounded-xl bg-violet-950 py-6 text-sm font-semibold text-white shadow-md transition-all duration-150 hover:bg-violet-900 active:scale-[0.99]"
         >
           {loginIsPending ? 'Signing In...' : 'Log In'}
         </Button>
@@ -307,7 +315,7 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
         <Button
           type="submit"
           disabled={signupIsPending}
-          className="w-full rounded-xl py-6 text-sm font-semibold"
+          className="w-full rounded-xl bg-violet-950 py-6 text-sm font-semibold text-white shadow-md transition-all duration-150 hover:bg-violet-900 active:scale-[0.99]"
         >
           {signupIsPending ? 'Creating Account...' : 'Sign Up'}
         </Button>
@@ -337,8 +345,10 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
         // Mobile Layout (Stacked + Fades, no slide translation)
         <div className="border-border bg-card flex w-full max-w-md flex-col overflow-hidden rounded-2xl border shadow-2xl">
           {/* Mobile Branding Banner */}
-          <div className="flex flex-col items-center justify-center space-y-4 bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 p-6 text-center text-white">
-            <LineArtCat className="h-16 w-16 text-white" />
+          <div className="flex flex-col items-center justify-center space-y-4 bg-gradient-to-br from-violet-950 via-purple-900 to-indigo-950 p-6 text-center text-white">
+            <div className="rounded-xl bg-white/10 p-2.5 text-white">
+              <FileText className="h-6 w-6 animate-pulse text-purple-300" />
+            </div>
             <AnimatePresence mode="wait">
               <motion.div
                 key={isSignup ? 'signup-mobile-title' : 'login-mobile-title'}
@@ -372,7 +382,7 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
         <div className="border-border bg-card relative flex h-[580px] w-full max-w-[880px] flex-row overflow-hidden rounded-3xl border shadow-2xl">
           {/* 1. Branding / Marketing Slide Panel (translates left/right based on isSignup) */}
           <motion.div
-            className="absolute top-0 bottom-0 left-0 z-10 flex h-full w-1/2 flex-col justify-between bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 p-12 text-white"
+            className="absolute top-0 bottom-0 left-0 z-10 flex h-full w-1/2 flex-col justify-between bg-gradient-to-br from-violet-950 via-purple-900 to-indigo-950 p-12 text-white"
             animate={{ x: isSignup ? '100%' : '0%' }}
             transition={{ type: 'tween', ease: 'easeInOut', duration: 0.45 }}
           >
