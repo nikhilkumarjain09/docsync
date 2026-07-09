@@ -5,20 +5,76 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+enum Role {
+  OWNER
+  EDITOR
+  VIEWER
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String                 @id @default(cuid())
+  email          String                 @unique
+  name           String?
+  hashedPassword String?
+  image          String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  collaborations DocumentCollaborator[]
+  ownedDocuments Document[]             @relation("DocumentOwner")
+  updatesCreated DocumentUpdateLog[]    @relation("UpdateCreator")
+  snapshots      DocumentSnapshot[]     @relation("SnapshotCreator")
 }
 
 model Document {
-  id        String   @id @default(uuid())
-  title     String
-  content   Bytes? // Y.encodeStateAsUpdate checkpoint
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String                 @id @default(cuid())
+  title           String
+  ownerId         String
+  owner           User                   @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  latestSnapshot  Bytes? // Y.encodeStateAsUpdate bytea checkpoint
+  snapshotVersion Int                    @default(0)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  collaborators   DocumentCollaborator[]
+  updateLogs      DocumentUpdateLog[]
+  snapshots       DocumentSnapshot[]
+}
+
+model DocumentCollaborator {
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@id([documentId, userId])
+}
+
+model DocumentUpdateLog {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  update     Bytes // The Yjs state update bytea
+  createdBy  String
+  creator    User     @relation("UpdateCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([documentId])
+}
+
+model DocumentSnapshot {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  state      Bytes // Y.encodeStateAsUpdate checkpoint bytea
+  createdBy  String
+  creator    User     @relation("SnapshotCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  label      String?
+  createdAt  DateTime @default(now())
+
+  @@index([documentId])
 }

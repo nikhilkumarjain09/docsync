@@ -45,5 +45,6 @@ next-env.d.ts
 # monorepo ignores
 **/node_modules
 **/dist
+**/src/generated/
 .next
 .turbo

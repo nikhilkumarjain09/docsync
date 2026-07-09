@@ -4,12 +4,12 @@ export * from './authorize';
 
 export const HandshakeSchema = z.object({
   token: z.string(),
-  docId: z.string().uuid(),
+  docId: z.string(),
 });
 
 export const SyncRequestSchema = z.object({
-  docId: z.string().uuid(),
-  update: z.string(), // Base64 or binary represented as string
+  docId: z.string(),
+  update: z.string(), // Base64 represented update string
 });
 
 export type HandshakeInput = z.infer<typeof HandshakeSchema>;
