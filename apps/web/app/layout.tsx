@@ -15,6 +15,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'DocSync',
   description: 'Local-first collaborative document editor',
+  icons: {
+    icon: [{ url: '/docsyncIcon.png', type: 'image/png' }],
+    shortcut: '/docsyncIcon.png',
+    apple: '/docsyncIcon.png',
+  },
 };
 
 import { SessionProvider } from 'next-auth/react';

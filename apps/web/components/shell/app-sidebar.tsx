@@ -498,38 +498,66 @@ export function AppSidebar() {
       </div>
 
       {/* User profile & actions at bottom */}
-      <div className="border-sidebar-border flex items-center justify-between gap-3 border-t p-3">
-        <div className="flex max-w-[70%] items-center gap-2">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback>
-              {(session.user.name || session.user.email || 'U').slice(0, 2)}
-            </AvatarFallback>
-          </Avatar>
-          <div className="truncate text-xs">
-            <div className="truncate font-bold">{session.user.name || session.user.email}</div>
-            <div className="text-muted-foreground truncate text-[10px]">{session.user.email}</div>
+      <div className="border-sidebar-border bg-sidebar-muted/10 flex flex-col border-t p-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="flex max-w-[75%] items-center gap-2">
+            <Avatar className="h-8 w-8">
+              <AvatarFallback>
+                {(session.user.name || session.user.email || 'U').slice(0, 2)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="truncate text-xs">
+              <div className="truncate font-bold">{session.user.name || session.user.email}</div>
+              <div className="text-muted-foreground truncate text-[10px]">{session.user.email}</div>
+            </div>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-foreground h-7 w-7"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={() => toast.info('Settings panel under construction')}>
+                <Settings className="mr-2 h-3.5 w-3.5" /> Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => signOut({ callbackUrl: '/login' })} destructive>
+                <LogOut className="mr-2 h-3.5 w-3.5" /> Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* Footer */}
+        <div className="text-muted-foreground/60 border-sidebar-border/50 flex flex-col gap-0.5 border-t pt-2 text-[10px] leading-relaxed font-medium">
+          <div>
+            Developer: <span className="text-muted-foreground font-semibold">Nikhil Jain</span>
+          </div>
+          <div className="mt-0.5 flex items-center gap-2">
+            <a
+              href="https://github.com/nikhiljain"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-primary hover:underline"
+            >
+              GitHub
+            </a>
+            <span className="text-muted-foreground/30">•</span>
+            <a
+              href="https://linkedin.com/in/nikhiljain"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-primary hover:underline"
+            >
+              LinkedIn
+            </a>
           </div>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground hover:text-foreground h-7 w-7"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40">
-            <DropdownMenuItem onClick={() => toast.info('Settings panel under construction')}>
-              <Settings className="mr-2 h-3.5 w-3.5" /> Settings
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => signOut({ callbackUrl: '/login' })} destructive>
-              <LogOut className="mr-2 h-3.5 w-3.5" /> Log out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
 
       {/* Modals and Dialogs */}
