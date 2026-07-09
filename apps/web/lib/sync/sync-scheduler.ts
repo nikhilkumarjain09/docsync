@@ -1,18 +1,18 @@
 /**
  * @file sync-scheduler.ts
- * @description Background synchronization scheduler for local-first Yjs document reconciliation.
+ * @description Real-time WebSocket synchronization client for local-first Yjs documents.
  * 
- * Manages pushing queued updates from the outbox and pulling new updates from the server.
+ * Manages instant pushes over WebSocket connection when online, local outbox buffering when
+ * offline, dynamic reconnection backoff, and Yjs awareness presence sharing.
  */
 
 import * as Y from 'yjs';
+import * as awarenessProtocol from 'y-protocols/awareness';
 import { addToOutbox, getPendingUpdates, removeUpdates } from './outbox';
 
-const SYNC_INTERVAL_MS = 5000;
-const RETRY_BACKOFF_FACTOR = 2;
-const MAX_BACKOFF_MS = 30000;
+export type ConnectionStatus = 'offline' | 'connecting' | 'synced' | 'syncing';
 
-// Base64 helper methods safe for large arrays in browser environments
+// Base64 converters compatible with browser environments
 function toBase64(arr: Uint8Array): string {
   let binary = '';
   const len = arr.byteLength;
@@ -27,147 +27,287 @@ function fromBase64(str: string): Uint8Array {
   return Uint8Array.from(binString, (m) => m.charCodeAt(0));
 }
 
+// Simple color hash based on userId
+function getStableHue(userId: string): number {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash) % 360;
+}
+
 export class SyncScheduler {
   private documentId: string;
   private doc: Y.Doc;
-  private intervalId: any | null = null;
-  private isSyncing = false;
-  private backoffMs = SYNC_INTERVAL_MS;
+  private ws: WebSocket | null = null;
+  private status: ConnectionStatus = 'offline';
+  private statusListeners = new Set<(status: ConnectionStatus) => void>();
+  private reconnectTimeoutId: any | null = null;
+  private reconnectDelay = 2000;
   private lastSeenLogIdKey: string;
+  private isProcessingOutbox = false;
+
+  // Yjs Awareness instance for tracking cursor/selection presence
+  public awareness: awarenessProtocol.Awareness;
   
-  constructor(documentId: string, doc: Y.Doc) {
+  constructor(documentId: string, doc: Y.Doc, user?: { id: string; name?: string | null }) {
     this.documentId = documentId;
     this.doc = doc;
     this.lastSeenLogIdKey = `docsync-last-seen-id:${documentId}`;
     
-    // Bind document local update event listener
+    // 1. Initialize Yjs Awareness
+    this.awareness = new awarenessProtocol.Awareness(doc);
+
+    // 2. Set stable user details in local awareness state if authenticated
+    if (user && user.id) {
+      const hue = getStableHue(user.id);
+      this.awareness.setLocalStateField('user', {
+        name: user.name || 'Anonymous',
+        color: `hsl(${hue}, 80%, 45%)`,
+        userId: user.id,
+      });
+    }
+
+    // 3. Bind document update event listener
     this.doc.on('update', this.handleLocalUpdate);
+
+    // 4. Bind local awareness update listener to send updates over WS
+    this.awareness.on('update', this.handleLocalAwarenessUpdate);
   }
 
   /**
-   * Capture Yjs document updates. If the update is local (not applied from sync),
-   * push it into the persistent IndexedDB outbox.
+   * Register a status listener.
+   */
+  public onStatusChange(listener: (status: ConnectionStatus) => void) {
+    this.statusListeners.add(listener);
+    listener(this.status);
+    return () => this.statusListeners.delete(listener);
+  }
+
+  private setStatus(nextStatus: ConnectionStatus) {
+    if (this.status === nextStatus) return;
+    this.status = nextStatus;
+    console.log(`[SyncScheduler] Connection status: ${nextStatus}`);
+    this.statusListeners.forEach(listener => listener(nextStatus));
+  }
+
+  public getStatus(): ConnectionStatus {
+    return this.status;
+  }
+
+  /**
+   * Local Yjs document change handler. Save to IndexedDB outbox and send instantly if online.
    */
   private handleLocalUpdate = async (update: Uint8Array, origin: any) => {
-    // Only queue updates created locally by user actions (origin is null or undefined).
-    // We explicitly bypass updates applied from the sync pull loop (origin === 'server-sync').
-    if (origin === 'server-sync') {
+    // Skip updates that come from server sync loop
+    if (origin === 'server-sync' || origin === this) {
       return;
     }
 
     try {
       await addToOutbox(this.documentId, update);
-      console.log(`[SyncScheduler] Queued local update to outbox for: ${this.documentId}`);
-      // Trigger a sync immediately to reduce latency (debounced/deferred sync)
-      this.triggerSync();
+      
+      // If WebSocket is open and authenticated, trigger outbox drain instantly
+      if (this.status === 'synced' || this.status === 'syncing') {
+        this.drainOutbox();
+      }
     } catch (e) {
-      console.error('[SyncScheduler] Failed to queue local update:', e);
+      console.error('[SyncScheduler] Failed to write local edit to outbox:', e);
     }
   };
 
   /**
-   * Start the background sync loop.
+   * Broadcast local awareness presence updates (cursors, selections) to the room.
    */
-  public start() {
-    if (this.intervalId) return;
-
-    console.log(`[SyncScheduler] Starting synchronization loop for: ${this.documentId}`);
-    
-    const runLoop = async () => {
-      await this.sync();
-      // Re-schedule with dynamic backoff
-      this.intervalId = setTimeout(runLoop, this.backoffMs);
-    };
-
-    this.intervalId = setTimeout(runLoop, this.backoffMs);
-  }
-
-  /**
-   * Stop the synchronization loop and clean up Yjs listener.
-   */
-  public stop() {
-    if (this.intervalId) {
-      clearTimeout(this.intervalId);
-      this.intervalId = null;
+  private handleLocalAwarenessUpdate = () => {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try {
+        const localState = awarenessProtocol.encodeAwarenessUpdate(this.awareness, [this.doc.clientID]);
+        this.ws.send(JSON.stringify({
+          type: 'awareness',
+          update: toBase64(localState),
+        }));
+      } catch (e) {
+        console.error('[SyncScheduler] Failed to send awareness updates:', e);
+      }
     }
-    this.doc.off('update', this.handleLocalUpdate);
-    console.log(`[SyncScheduler] Stopped synchronization loop for: ${this.documentId}`);
+  };
+
+  /**
+   * Fetch authenticated WebSocket JWE token and start connection.
+   */
+  public async start() {
+    this.setStatus('connecting');
+    this.connect();
   }
 
   /**
-   * Trigger an immediate sync action.
+   * Trigger an immediate sync action (draining local outbox).
    */
   public triggerSync() {
-    if (this.isSyncing) return;
-    this.sync();
+    this.drainOutbox();
   }
 
   /**
-   * Core Push/Pull sync loop.
+   * Clean up connections and listeners.
    */
-  private async sync() {
-    if (this.isSyncing) return;
-    this.isSyncing = true;
+  public stop() {
+    this.setStatus('offline');
+    this.disconnect();
+    this.doc.off('update', this.handleLocalUpdate);
+    this.awareness.off('update', this.handleLocalAwarenessUpdate);
+    this.awareness.destroy();
+  }
 
-    const pending = await getPendingUpdates(this.documentId);
-    const lastSeenLogId = localStorage.getItem(this.lastSeenLogIdKey);
+  private disconnect() {
+    if (this.reconnectTimeoutId) {
+      clearTimeout(this.reconnectTimeoutId);
+      this.reconnectTimeoutId = null;
+    }
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
 
-    const payload = {
-      updates: pending.map(p => toBase64(p.update)),
-      lastSeenLogId,
-    };
+  private async connect() {
+    this.disconnect();
 
     try {
-      console.log(`[SyncScheduler] Syncing document ${this.documentId}... Pushing: ${pending.length} updates. Pulling from cursor: ${lastSeenLogId}`);
-
-      const response = await fetch(`/api/documents/${this.documentId}/sync`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Sync server responded with ${response.status}`);
+      // 1. Fetch encrypted JWT token from Next.js server
+      const tokenRes = await fetch('/api/auth/ws-token');
+      if (!tokenRes.ok) {
+        throw new Error('Could not retrieve WebSocket session token');
       }
+      const { token } = await tokenRes.json();
 
-      const data = await response.json();
-      const { updates: pulledUpdates, lastSeenLogId: nextLogId } = data;
+      // 2. Open WebSocket connection pointing to Relay port
+      // Fallback url during local testing
+      const wsUrl = `ws://localhost:4444/doc/${this.documentId}?token=${token}`;
+      this.ws = new WebSocket(wsUrl);
 
-      // 1. Process pulled updates and apply them to local Y.Doc
-      if (pulledUpdates && pulledUpdates.length > 0) {
-        console.log(`[SyncScheduler] Received ${pulledUpdates.length} updates from server.`);
-        
-        // Wrap edits in transaction with origin 'server-sync' to prevent looping
-        this.doc.transact(() => {
-          pulledUpdates.forEach((item: { update: string }) => {
-            const updateBytes = fromBase64(item.update);
+      this.ws.onopen = () => {
+        console.log('[SyncScheduler] WebSocket connection open.');
+        this.reconnectDelay = 2000; // Reset backoff
+      };
+
+      this.ws.onmessage = async (event) => {
+        let msg: any;
+        try {
+          msg = JSON.parse(event.data.toString());
+        } catch (e) {
+          console.warn('[SyncScheduler] Invalid WS payload received.');
+          return;
+        }
+
+        if (msg.type === 'init') {
+          // Hydrate Y.Doc state
+          const { update: initUpdateBase64, lastSeenLogId } = msg;
+          if (initUpdateBase64) {
+            const updateBytes = fromBase64(initUpdateBase64);
             Y.applyUpdate(this.doc, updateBytes, 'server-sync');
-          });
-        }, 'server-sync');
-      }
+          }
+          if (lastSeenLogId) {
+            localStorage.setItem(this.lastSeenLogIdKey, lastSeenLogId);
+          }
+          
+          this.setStatus('synced');
+          console.log('[SyncScheduler] Y.Doc state initialized from server logs.');
+          
+          // Instantly drain any local offline edits to catch up
+          this.drainOutbox();
+        } else if (msg.type === 'sync') {
+          const { update: updateBase64, id } = msg;
+          if (updateBase64) {
+            const updateBytes = fromBase64(updateBase64);
+            Y.applyUpdate(this.doc, updateBytes, 'server-sync');
+          }
+          if (id) {
+            localStorage.setItem(this.lastSeenLogIdKey, id);
+          }
+          this.setStatus('synced');
+        } else if (msg.type === 'awareness') {
+          const { update: awarenessUpdateBase64 } = msg;
+          if (awarenessUpdateBase64) {
+            const updateBytes = fromBase64(awarenessUpdateBase64);
+            awarenessProtocol.applyAwarenessUpdate(this.awareness, updateBytes, 'server-sync');
+          }
+        }
+      };
 
-      // 2. Update local cursor
-      if (nextLogId) {
-        localStorage.setItem(this.lastSeenLogIdKey, nextLogId);
-      }
+      this.ws.onclose = (event) => {
+        console.log(`[SyncScheduler] WebSocket closed. Code: ${event.code}`);
+        this.setStatus('offline');
+        
+        // Handle unauthorized closes cleanly (e.g. close code 4001, no role)
+        if (event.code === 4001) {
+          console.error('[SyncScheduler] Access Forbidden. Disabling reconnect loop.');
+          return;
+        }
 
-      // 3. Clear successfully sent updates from outbox
+        // Trigger retry backoff
+        this.scheduleReconnect();
+      };
+
+      this.ws.onerror = (err) => {
+        console.error('[SyncScheduler] WebSocket client error:', err);
+        this.setStatus('offline');
+      };
+
+    } catch (err: any) {
+      console.error('[SyncScheduler] Connection setup failed:', err.message);
+      this.setStatus('offline');
+      this.scheduleReconnect();
+    }
+  }
+
+  private scheduleReconnect() {
+    if (this.reconnectTimeoutId) return;
+
+    console.log(`[SyncScheduler] Retrying connection in ${this.reconnectDelay}ms...`);
+    this.reconnectTimeoutId = setTimeout(() => {
+      this.reconnectTimeoutId = null;
+      this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000);
+      this.connect();
+    }, this.reconnectDelay);
+  }
+
+  /**
+   * Drain and push all local pending updates in the IndexedDB outbox.
+   */
+  private async drainOutbox() {
+    if (this.isProcessingOutbox || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    this.isProcessingOutbox = true;
+    this.setStatus('syncing');
+
+    try {
+      const pending = await getPendingUpdates(this.documentId);
       if (pending.length > 0) {
-        const pendingIds = pending.map(p => p.id);
-        await removeUpdates(pendingIds);
-        console.log(`[SyncScheduler] Successfully synchronized and cleared ${pending.length} updates.`);
-      }
+        console.log(`[SyncScheduler] Draining outbox: pushing ${pending.length} pending updates.`);
+        
+        for (const item of pending) {
+          const base64Update = toBase64(item.update);
+          
+          // Send update over socket
+          this.ws.send(JSON.stringify({
+            type: 'sync',
+            update: base64Update,
+          }));
 
-      // Reset backoff on success
-      this.backoffMs = SYNC_INTERVAL_MS;
+          // Clear outbox item
+          await removeUpdates([item.id]);
+        }
+        console.log('[SyncScheduler] Outbox successfully drained.');
+      }
+      this.setStatus('synced');
     } catch (e: any) {
-      console.error('[SyncScheduler] Synchronization failed:', e.message);
-      // Implement exponential backoff on connection/server failures
-      this.backoffMs = Math.min(this.backoffMs * RETRY_BACKOFF_FACTOR, MAX_BACKOFF_MS);
+      console.error('[SyncScheduler] Failed to drain outbox:', e.message);
+      this.setStatus('offline');
     } finally {
-      this.isSyncing = false;
+      this.isProcessingOutbox = false;
     }
   }
 }
+export type { ConnectionStatus as SyncConnectionStatus };
