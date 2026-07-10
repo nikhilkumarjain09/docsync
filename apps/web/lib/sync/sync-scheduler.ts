@@ -193,12 +193,36 @@ export class SyncScheduler {
       if (!tokenRes.ok) {
         throw new Error('Could not retrieve WebSocket session token');
       }
-      const { token } = await tokenRes.json();
+      const { token, wsUrl: serverWsUrl } = await tokenRes.json();
 
       // 2. Open WebSocket connection pointing to Relay port
-      // Fallback url during local testing
-      const wsUrl = `ws://localhost:4444/doc/${this.documentId}?token=${token}`;
-      this.ws = new WebSocket(wsUrl);
+      // Dynamically resolve base URL to handle localhost, local IP network access, or production host
+      let resolvedWsUrl = serverWsUrl;
+      
+      if (typeof window !== 'undefined') {
+        const hostname = window.location.hostname;
+        const isLocal = 
+          hostname === 'localhost' || 
+          hostname === '127.0.0.1' || 
+          hostname.startsWith('192.168.') || 
+          hostname.startsWith('10.') || 
+          hostname.startsWith('172.');
+
+        if (isLocal) {
+          // Point to port 4444 on the current dev hostname (e.g. localhost or network IP)
+          resolvedWsUrl = `ws://${hostname}:4444`;
+        } else if (!resolvedWsUrl || resolvedWsUrl.includes('localhost')) {
+          // Fallback to secure WS connection matching the production origin
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          resolvedWsUrl = `${protocol}//${window.location.host}`;
+        }
+      } else if (!resolvedWsUrl) {
+        resolvedWsUrl = 'ws://localhost:4444';
+      }
+
+      const fullWsUrl = `${resolvedWsUrl}/doc/${this.documentId}?token=${token}`;
+      console.log('[SyncScheduler] Connecting to WebSocket:', resolvedWsUrl);
+      this.ws = new WebSocket(fullWsUrl);
 
       this.ws.onopen = () => {
         console.log('[SyncScheduler] WebSocket connection open.');

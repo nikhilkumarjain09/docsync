@@ -184,9 +184,14 @@
   overflow-x: auto;
 }
 
-/* List spacing */
-.ProseMirror ul,
+/* List spacing and styles */
+.ProseMirror ul:not([data-type="taskList"]) {
+  list-style-type: disc !important;
+  padding-left: 1.5rem;
+}
+
 .ProseMirror ol {
+  list-style-type: decimal !important;
   padding-left: 1.5rem;
 }
 

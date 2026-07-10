@@ -104,6 +104,7 @@ import {
   LogOut,
   FileCheck,
   Undo,
+  Redo,
   Eye,
   Edit,
   Copy,
@@ -340,9 +341,13 @@ function EditorWorkspaceContent({
     originalText: string;
     improvedText: string;
   } | null>(null);
+  const [aiAssistError, setAiAssistError] = useState<string | null>(null);
 
   // Aria Announcer
   const [ariaLiveAnnouncement, setAriaLiveAnnouncement] = useState('');
+
+  const autoSaveInterval = useRef<any>(null);
+  const hasUnsavedChanges = useRef(false);
 
   // Load document metadata
   const loadDocMetadata = React.useCallback(async () => {
@@ -355,25 +360,17 @@ function EditorWorkspaceContent({
     } catch {
       // Ignore error
     }
-  }, [documentId, setDocMetadata]);
+  }, [documentId]);
 
-  // Load collaborator and snapshot records
   const loadCollaborators = React.useCallback(async () => {
     try {
       const res = await fetch(`/api/documents/${documentId}/collaborators`);
       if (res.ok) {
-        const list: Collaborator[] = await res.json();
+        const list = await res.json();
+        setActivePeers(list);
 
-        // Find current user's role
-        const me = list.find((c) => c.userId === userId);
-        console.log(
-          '[COLLAB DEBUG] userId:',
-          userId,
-          'list:',
-          JSON.stringify(list),
-          'me:',
-          JSON.stringify(me),
-        );
+        // Find current user's role in this document
+        const me = list.find((p: Collaborator) => p.userId === userId);
         if (me) {
           setCurrentUserRole(me.role);
         } else {
@@ -603,6 +600,67 @@ function EditorWorkspaceContent({
     };
   }, [editor]);
 
+  // Track editor changes for auto-saving
+  useEffect(() => {
+    if (!editor) return;
+    const handleUpdate = () => {
+      hasUnsavedChanges.current = true;
+    };
+    editor.on('update', handleUpdate);
+    return () => {
+      editor.off('update', handleUpdate);
+    };
+  }, [editor]);
+
+  // Google Docs style auto-saving: save versions automatically in background
+  useEffect(() => {
+    if (isViewer || !editor || !doc) return;
+
+    autoSaveInterval.current = setInterval(async () => {
+      if (!hasUnsavedChanges.current) return;
+
+      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const autoLabel = `Auto-save (${timestamp})`;
+      
+      try {
+        const stateUpdate = Y.encodeStateAsUpdate(doc);
+        let binary = '';
+        for (let i = 0; i < stateUpdate.byteLength; i++) {
+          binary += String.fromCharCode(stateUpdate[i]);
+        }
+        const stateBase64 = btoa(binary);
+
+        const res = await fetch(`/api/documents/${documentId}/snapshots`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label: autoLabel, state: stateBase64 }),
+        });
+
+        if (res.ok) {
+          hasUnsavedChanges.current = false;
+          loadSnapshots();
+          console.log(`[Auto-save] Version checkpoint saved successfully: ${autoLabel}`);
+        }
+      } catch (err) {
+        console.error('[Auto-save] Background snapshot creation failed:', err);
+      }
+    }, 5 * 60 * 1000); // Check every 5 minutes
+
+    return () => {
+      if (autoSaveInterval.current) {
+        clearInterval(autoSaveInterval.current);
+      }
+    };
+  }, [editor, doc, documentId, isViewer, loadSnapshots]);
+
+  // Close slash menu on scroll
+  useEffect(() => {
+    if (!slashMenu) return;
+    const handleScroll = () => setSlashMenu(null);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [slashMenu]);
+
   // ─── Keyboard Shortcuts Setup ─────────────────────────────────────────
   useEffect(() => {
     if (!editor || isViewer) return;
@@ -690,9 +748,12 @@ function EditorWorkspaceContent({
         const query = text.slice(1).toLowerCase();
         try {
           const coords = editor.view.coordsAtPos($from.pos);
+          const spaceBelow = window.innerHeight - coords.bottom;
+          const openAbove = spaceBelow < 280; // Estimated height of the command dropdown
+
           setSlashMenu({
             x: coords.left,
-            y: coords.top + window.scrollY + 24, // Position just below the block cursor
+            y: openAbove ? coords.top - 280 - 8 : coords.top + 24, // Open above or below depending on vertical space
             filterText: query,
             selectionFrom: $from.start(),
           });
@@ -992,6 +1053,7 @@ function EditorWorkspaceContent({
 
     setAiAssistLoading(true);
     setAiAssistResult(null);
+    setAiAssistError(null);
 
     try {
       const res = await fetch('/api/ai/writing-assist', {
@@ -1014,10 +1076,12 @@ function EditorWorkspaceContent({
       if (res.ok) {
         setAiAssistResult(data);
       } else {
+        setAiAssistError(data.error || 'AI assist request failed');
         toast.error(data.error || 'AI assist request failed');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setAiAssistError(err.message || 'An unexpected error occurred');
     } finally {
       setAiAssistLoading(false);
     }
@@ -1221,6 +1285,12 @@ function EditorWorkspaceContent({
   const toggleCode = () => editor?.chain().focus().toggleCode().run();
   const toggleUnderline = () => editor?.chain().focus().toggleUnderline().run();
   const toggleStrike = () => editor?.chain().focus().toggleStrike().run();
+  const toggleBulletList = () => editor?.chain().focus().toggleBulletList().run();
+  const toggleOrderedList = () => editor?.chain().focus().toggleOrderedList().run();
+  const toggleTaskList = () => editor?.chain().focus().toggleTaskList().run();
+  const clearFormatting = () => editor?.chain().focus().clearNodes().unsetAllMarks().run();
+  const undo = () => editor?.chain().focus().undo().run();
+  const redo = () => editor?.chain().focus().redo().run();
 
   return (
     <div className="from-background to-muted/20 flex min-h-screen flex-col bg-radial">
@@ -1392,6 +1462,32 @@ function EditorWorkspaceContent({
                     </>
                   )}
 
+                  {/* Undo & Redo Actions */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={undo}
+                    disabled={!editor?.can().undo()}
+                    className="h-7 w-7 shrink-0"
+                    title="Undo (Ctrl+Z)"
+                    aria-label="Undo"
+                  >
+                    <Undo className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={redo}
+                    disabled={!editor?.can().redo()}
+                    className="h-7 w-7 shrink-0"
+                    title="Redo (Ctrl+Y)"
+                    aria-label="Redo"
+                  >
+                    <Redo className="h-3.5 w-3.5" />
+                  </Button>
+
+                  <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
+
                   {/* 1. Block Conversion Dropdown */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -1537,6 +1633,50 @@ function EditorWorkspaceContent({
                     aria-label="Format Code"
                   >
                     <Code className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={clearFormatting}
+                    className="h-7 w-7 shrink-0"
+                    title="Clear Formatting"
+                    aria-label="Clear Formatting"
+                  >
+                    <Ban className="h-3.5 w-3.5" />
+                  </Button>
+
+                  <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
+
+                  {/* Direct List Toggles */}
+                  <Button
+                    variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'}
+                    size="icon"
+                    onClick={toggleBulletList}
+                    className="h-7 w-7 shrink-0"
+                    title="Bullet List"
+                    aria-label="Bullet List"
+                  >
+                    <List className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant={editor.isActive('orderedList') ? 'secondary' : 'ghost'}
+                    size="icon"
+                    onClick={toggleOrderedList}
+                    className="h-7 w-7 shrink-0"
+                    title="Numbered List"
+                    aria-label="Numbered List"
+                  >
+                    <ListOrdered className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant={editor.isActive('taskList') ? 'secondary' : 'ghost'}
+                    size="icon"
+                    onClick={toggleTaskList}
+                    className="h-7 w-7 shrink-0"
+                    title="Todo List"
+                    aria-label="Todo List"
+                  >
+                    <CheckSquare className="h-3.5 w-3.5" />
                   </Button>
 
                   <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
@@ -1799,6 +1939,12 @@ function EditorWorkspaceContent({
                     >
                       {aiAssistLoading ? 'Thinking...' : 'Generate Suggestion'}
                     </Button>
+                    {aiAssistError && (
+                      <div className="text-red-500 text-[10px] bg-red-500/10 border border-red-500/20 p-2 rounded-lg flex items-start gap-1.5">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                        <span className="leading-tight">{aiAssistError}</span>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -1841,7 +1987,7 @@ function EditorWorkspaceContent({
             {/* Notion Floating Slash Menu */}
             {slashMenu && filteredSlashItems.length > 0 && (
               <div
-                className="border-border bg-background/95 animate-in zoom-in-95 absolute z-50 w-64 overflow-hidden rounded-xl border p-1.5 shadow-2xl backdrop-blur-md duration-100"
+                className="border-border bg-background/95 animate-in zoom-in-95 fixed z-50 w-64 overflow-hidden rounded-xl border p-1.5 shadow-2xl backdrop-blur-md duration-100"
                 style={{ top: slashMenu.y, left: slashMenu.x }}
                 role="listbox"
                 aria-label="Block creation commands"

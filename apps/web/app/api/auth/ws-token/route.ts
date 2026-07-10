@@ -14,5 +14,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Session token not found' }, { status: 404 });
   }
 
-  return NextResponse.json({ token });
+  const wsRelayUrl = process.env.WS_RELAY_URL || 'ws://localhost:4444';
+
+  return NextResponse.json({ token, wsUrl: wsRelayUrl });
 }

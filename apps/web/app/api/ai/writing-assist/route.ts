@@ -112,6 +112,7 @@ Return ONLY the raw improved paragraph text. Do not wrap it in quotes, markdown 
     });
   } catch (e: any) {
     console.error('[AI Assist] Writing assist failed:', e.message);
-    return NextResponse.json({ error: 'Failed to process writing assist' }, { status: 500 });
+    const detailMsg = e.message || String(e);
+    return NextResponse.json({ error: `Failed to process writing assist: ${detailMsg}` }, { status: 500 });
   }
 }
