@@ -8,6 +8,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useSession } from 'next-auth/react';
+import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import {
   User,
@@ -29,6 +30,7 @@ type TabType = 'profile' | 'appearance' | 'security' | 'sync';
 
 export function SettingsDialog({ open, onOpenChange, defaultTab = 'profile' }: SettingsDialogProps) {
   const { data: session, update } = useSession();
+  const { theme: currentTheme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = React.useState<TabType>(defaultTab);
   const [name, setName] = React.useState('');
   const [isSaving, setIsSaving] = React.useState(false);
@@ -197,20 +199,26 @@ export function SettingsDialog({ open, onOpenChange, defaultTab = 'profile' }: S
                       Workspace Theme
                     </span>
                     <div className="grid grid-cols-3 gap-2">
-                      {['system', 'light', 'dark'].map((theme) => (
-                        <button
-                          key={theme}
-                          onClick={() => {
-                            toast.success(`Theme switched to ${theme}`);
-                          }}
-                          className={`flex flex-col items-center justify-center p-3 rounded-xl border border-border bg-card hover:bg-muted/30 text-xs font-semibold capitalize transition-all ${
-                            theme === 'system' ? 'border-primary ring-2 ring-primary/10' : ''
-                          }`}
-                        >
-                          <Monitor className="h-4 w-4 mb-1.5 text-muted-foreground" />
-                          <span>{theme}</span>
-                        </button>
-                      ))}
+                      {['system', 'light', 'dark'].map((t) => {
+                        const isActive = currentTheme === t;
+                        return (
+                          <button
+                            key={t}
+                            onClick={() => {
+                              setTheme(t);
+                              toast.success(`Interface theme updated to ${t}`);
+                            }}
+                            className={`flex flex-col items-center justify-center p-3 rounded-xl border text-xs font-semibold capitalize transition-all ${
+                              isActive
+                                ? 'border-primary ring-2 ring-primary/10 bg-primary/5 text-primary'
+                                : 'border-border bg-card hover:bg-muted/30 text-foreground'
+                            }`}
+                          >
+                            <Monitor className={`h-4 w-4 mb-1.5 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                            <span>{t}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 

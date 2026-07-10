@@ -23,6 +23,7 @@ export const metadata: Metadata = {
 };
 
 import { SessionProvider } from 'next-auth/react';
+import { ThemeProvider } from 'next-themes';
 import { Toaster } from 'sonner';
 
 export default function RootLayout({
@@ -37,10 +38,12 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col" suppressHydrationWarning>
-        <SessionProvider>
-          {children}
-          <Toaster position="bottom-right" theme="system" closeButton richColors />
-        </SessionProvider>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <SessionProvider>
+            {children}
+            <Toaster position="bottom-right" theme="system" closeButton richColors />
+          </SessionProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

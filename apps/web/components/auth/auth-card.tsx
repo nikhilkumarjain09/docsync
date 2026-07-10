@@ -627,13 +627,14 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
         </div>
 
         <div className="space-y-2">
-          <h3 className="text-foreground text-2xl font-bold tracking-tight">Verify your email</h3>
+          <h3 className="text-foreground text-2xl font-bold tracking-tight">Security Verification</h3>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            We sent a verification code to <br />
+            An authorization code has been dispatched to <br />
             <strong className="text-foreground font-semibold text-wrap break-all">
               {pendingVerificationEmail}
             </strong>. <br />
-            Enter the 6-digit code below to activate your account.
+            Please enter the 6-digit code below to authenticate your identity. <br />
+            <strong className="text-foreground font-bold block mt-1">Be sure to check your spam folder if you do not receive it shortly.</strong>
           </p>
         </div>
 
