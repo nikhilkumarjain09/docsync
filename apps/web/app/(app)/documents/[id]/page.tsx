@@ -391,6 +391,7 @@ function EditorWorkspaceContent({
   const [shareOpen, setShareOpen] = useState(false);
   const [checkpointOpen, setCheckpointOpen] = useState(false);
   const [confirmRestoreOpen, setConfirmRestoreOpen] = useState(false);
+  const [confirmTrashOpen, setConfirmTrashOpen] = useState(false);
   const [pendingRestoreSnapshot, setPendingRestoreSnapshot] = useState<Snapshot | null>(null);
 
   // Notion Slash Menu state
@@ -587,7 +588,7 @@ function EditorWorkspaceContent({
           openOnClick: false,
         }),
         GlobalDragHandle.configure({
-          dragHandleWidth: 48,
+          dragHandleWidth: 36,
           dragHandleSelector: '#editor-gutter-controls',
         }),
         // Custom Collapsible nodes
@@ -1454,14 +1455,17 @@ function EditorWorkspaceContent({
           }),
         });
 
-        if (!res.ok) throw new Error();
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Translation failed');
+        }
         const data = await res.json();
         editor.chain().focus().insertContent(data.improvedText).run();
       })(),
       {
         loading: `Translating text to ${lang}...`,
         success: `Translated successfully!`,
-        error: `Could not translate text.`,
+        error: (err: any) => err.message || `Could not translate text.`,
       },
     );
   };
@@ -1860,7 +1864,7 @@ function EditorWorkspaceContent({
                     <>
                       <DropdownMenuSeparator className="my-1.5" />
                       <DropdownMenuItem
-                        onClick={handleMoveToTrash}
+                        onClick={() => setConfirmTrashOpen(true)}
                         className="text-destructive focus:bg-destructive/10 focus:text-destructive flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-xs"
                       >
                         <div className="flex items-center gap-2">
@@ -1895,7 +1899,7 @@ function EditorWorkspaceContent({
         {/* Editor Main Section */}
         <div className="scrollbar-thumb-muted-foreground/20 hover:scrollbar-thumb-muted-foreground/40 flex min-h-0 min-w-0 flex-1 scrollbar-thin scrollbar-track-transparent flex-col gap-4 overflow-y-auto pr-1.5 transition-colors">
           {/* Document metadata card */}
-          <div className="border-border bg-card space-y-3 rounded-2xl border p-6 shadow-xs">
+          <div className="border-border bg-card shrink-0 space-y-3 rounded-2xl border p-6 shadow-xs">
             <div className="flex items-center justify-between">
               <span className="text-primary font-mono text-[10px] font-bold tracking-wider uppercase">
                 Live Workspace
@@ -1953,7 +1957,7 @@ function EditorWorkspaceContent({
 
           {/* Unconfigured API Key friendly alert banner */}
           {!isAiConfigured && (
-            <div className="border-warning/20 bg-warning/5 flex items-center gap-3 rounded-xl border p-4 text-xs">
+            <div className="border-warning/20 bg-warning/5 flex shrink-0 items-center gap-3 rounded-xl border p-4 text-xs">
               <AlertCircle className="h-5 w-5 shrink-0 text-amber-600" />
               <div className="flex-1">
                 <span className="font-bold text-amber-800 dark:text-amber-400">
@@ -1975,7 +1979,7 @@ function EditorWorkspaceContent({
 
           {/* Collaborative interactive container */}
           <div
-            className={`border-border bg-card relative min-h-[500px] rounded-2xl border p-8 shadow-xl transition-all md:p-12 ${
+            className={`border-border bg-card relative min-h-[500px] shrink-0 rounded-2xl border p-8 shadow-xl transition-all md:p-12 ${
               fontFamily === 'serif'
                 ? 'editor-font-serif'
                 : fontFamily === 'mono'
@@ -1983,645 +1987,651 @@ function EditorWorkspaceContent({
                   : 'editor-font-sans'
             } ${isSmallText ? 'editor-small-text' : ''} ${isFullWidth ? 'editor-full-width' : ''}`}
           >
-            {/* Embedded Drag Handle and Plus gutter controls */}
-            {!isViewer && editor && (
-              <div
-                className="absolute z-20 flex flex-row items-center gap-1"
-                id="editor-gutter-controls"
-              >
-                <button
-                  onClick={handleGutterPlus}
-                  className="text-muted-foreground hover:bg-muted hover:text-foreground pointer-events-auto flex h-5 w-5 items-center justify-center rounded-sm transition-colors"
-                  title="Insert paragraph below"
+            <div className="relative h-full w-full">
+              {/* Embedded Drag Handle and Plus gutter controls */}
+              {!isViewer && editor && (
+                <div
+                  className="absolute z-20 flex flex-row items-center gap-1"
+                  id="editor-gutter-controls"
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-                <div className="drag-handle global-drag-handle text-muted-foreground hover:bg-muted hover:text-foreground pointer-events-auto flex h-5 w-5 cursor-grab items-center justify-center rounded-sm active:cursor-grabbing">
-                  <GripVertical className="h-3.5 w-3.5" />
+                  <button
+                    onClick={handleGutterPlus}
+                    className="text-muted-foreground hover:bg-muted hover:text-foreground pointer-events-auto flex h-5 w-5 items-center justify-center rounded-sm transition-colors"
+                    title="Insert paragraph below"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="drag-handle global-drag-handle text-muted-foreground hover:bg-muted hover:text-foreground pointer-events-auto flex h-5 w-5 cursor-grab items-center justify-center rounded-sm active:cursor-grabbing">
+                    <GripVertical className="h-3.5 w-3.5" />
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Notion Bubble Menu */}
-            {editor && !isViewer && (
-              <BubbleMenu
-                editor={editor}
-                {...({
-                  tippyOptions: {
-                    duration: 150,
-                    onClickOutside(instance: any, event: any) {
-                      const target = event.target as HTMLElement;
-                      if (
-                        target.closest('[data-radix-popper-content-wrapper]') ||
-                        target.closest('[role="menu"]') ||
-                        target.closest('[role="dialog"]') ||
-                        target.closest('.fixed') ||
-                        target.closest('#editor-gutter-controls')
-                      ) {
-                        return;
-                      }
-                      instance.hide();
+              {/* Notion Bubble Menu */}
+              {editor && !isViewer && (
+                <BubbleMenu
+                  editor={editor}
+                  {...({
+                    tippyOptions: {
+                      duration: 150,
+                      onClickOutside(instance: any, event: any) {
+                        const target = event.target as HTMLElement;
+                        if (
+                          target.closest('[data-radix-popper-content-wrapper]') ||
+                          target.closest('[role="menu"]') ||
+                          target.closest('[role="dialog"]') ||
+                          target.closest('.fixed') ||
+                          target.closest('#editor-gutter-controls')
+                        ) {
+                          return;
+                        }
+                        instance.hide();
+                      },
                     },
-                  },
-                } as any)}
-              >
-                <div className="border-border bg-background/95 animate-in zoom-in-95 flex max-w-[90vw] flex-wrap items-center gap-1 rounded-xl border p-1.5 shadow-xl backdrop-blur-md duration-100">
-                  {/* AI Writing Assist Button */}
-                  {isAiConfigured && (
-                    <>
+                  } as any)}
+                >
+                  <div className="border-border bg-background/95 animate-in zoom-in-95 flex max-w-[90vw] flex-wrap items-center gap-1 rounded-xl border p-1.5 shadow-xl backdrop-blur-md duration-100">
+                    {/* AI Writing Assist Button */}
+                    {isAiConfigured && (
+                      <>
+                        <Button
+                          variant={showAiAssist ? 'secondary' : 'ghost'}
+                          size="icon"
+                          onClick={() => {
+                            setAiAssistResult(null);
+                            setShowAiAssist(!showAiAssist);
+                          }}
+                          className="text-primary hover:text-primary h-7 w-7 shrink-0"
+                          aria-label="AI Writing Assist"
+                          title="AI Improve Selection"
+                        >
+                          <Wand2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
+                      </>
+                    )}
+
+                    {/* Undo & Redo Actions */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => editor?.chain().focus().undo().run()}
+                      disabled={!editor?.can().undo()}
+                      className="h-7 w-7 shrink-0"
+                      title="Undo (Ctrl+Z)"
+                      aria-label="Undo"
+                    >
+                      <Undo className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => editor?.chain().focus().redo().run()}
+                      disabled={!editor?.can().redo()}
+                      className="h-7 w-7 shrink-0"
+                      title="Redo (Ctrl+Y)"
+                      aria-label="Redo"
+                    >
+                      <Redo className="h-3.5 w-3.5" />
+                    </Button>
+
+                    <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
+
+                    {/* 1. Block Conversion Dropdown */}
+                    <DropdownMenu modal={false}>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 shrink-0 gap-1 px-2 text-xs font-semibold"
+                          title="Convert block type"
+                        >
+                          {(() => {
+                            if (editor.isActive('heading', { level: 1 })) return 'H1';
+                            if (editor.isActive('heading', { level: 2 })) return 'H2';
+                            if (editor.isActive('heading', { level: 3 })) return 'H3';
+                            if (editor.isActive('heading', { level: 4 })) return 'H4';
+                            if (editor.isActive('heading', { level: 5 })) return 'H5';
+                            if (editor.isActive('heading', { level: 6 })) return 'H6';
+                            if (editor.isActive('bulletList')) return 'Bullet List';
+                            if (editor.isActive('orderedList')) return 'Numbered List';
+                            if (editor.isActive('taskList')) return 'Todo List';
+                            if (editor.isActive('toggleBlock')) return 'Toggle Block';
+                            if (editor.isActive('blockquote')) return 'Quote';
+                            if (editor.isActive('codeBlock')) return 'Code Block';
+                            if (editor.isActive('calloutBlock')) return 'Callout';
+                            return 'Text';
+                          })()}
+                          <ChevronDown className="h-3 w-3 opacity-60" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="max-h-64 w-44 overflow-y-auto">
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().setParagraph().run()}
+                        >
+                          <FileText className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Text
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+                        >
+                          <Heading1 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 1
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+                        >
+                          <Heading2 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 2
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+                        >
+                          <Heading3 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 3
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().toggleHeading({ level: 4 }).run()}
+                        >
+                          <Heading4 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 4
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().toggleHeading({ level: 5 }).run()}
+                        >
+                          <Heading5 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 5
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().toggleHeading({ level: 6 }).run()}
+                        >
+                          <Heading6 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 6
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().toggleBulletList().run()}
+                        >
+                          <List className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Bullet List
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                        >
+                          <ListOrdered className="text-muted-foreground mr-2 h-3.5 w-3.5" />{' '}
+                          Numbered List
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().toggleTaskList().run()}
+                        >
+                          <CheckSquare className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Todo
+                          List
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                        >
+                          <Quote className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Quote
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+                        >
+                          <Code2 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Code Block
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().toggleCallout().run()}
+                        >
+                          <Lightbulb className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Callout
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
+
+                    {/* 2. Formatting Style Toggles */}
+                    <Button
+                      variant={editor.isActive('bold') ? 'secondary' : 'ghost'}
+                      size="icon"
+                      onClick={toggleBold}
+                      className="h-7 w-7 shrink-0"
+                      aria-label="Format Bold"
+                    >
+                      <Bold className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant={editor.isActive('italic') ? 'secondary' : 'ghost'}
+                      size="icon"
+                      onClick={toggleItalic}
+                      className="h-7 w-7 shrink-0"
+                      aria-label="Format Italic"
+                    >
+                      <Italic className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant={editor.isActive('underline') ? 'secondary' : 'ghost'}
+                      size="icon"
+                      onClick={toggleUnderline}
+                      className="h-7 w-7 shrink-0"
+                      aria-label="Format Underline"
+                    >
+                      <UnderlineIcon className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant={editor.isActive('strike') ? 'secondary' : 'ghost'}
+                      size="icon"
+                      onClick={toggleStrike}
+                      className="h-7 w-7 shrink-0"
+                      aria-label="Format Strikethrough"
+                    >
+                      <Strikethrough className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant={editor.isActive('code') ? 'secondary' : 'ghost'}
+                      size="icon"
+                      onClick={toggleCode}
+                      className="h-7 w-7 shrink-0"
+                      aria-label="Format Code"
+                    >
+                      <Code className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={clearFormatting}
+                      className="h-7 w-7 shrink-0"
+                      title="Clear Formatting"
+                      aria-label="Clear Formatting"
+                    >
+                      <Ban className="h-3.5 w-3.5" />
+                    </Button>
+
+                    <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
+
+                    {/* Direct List Toggles */}
+                    <Button
+                      variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'}
+                      size="icon"
+                      onClick={toggleBulletList}
+                      className="h-7 w-7 shrink-0"
+                      title="Bullet List"
+                      aria-label="Bullet List"
+                    >
+                      <List className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant={editor.isActive('orderedList') ? 'secondary' : 'ghost'}
+                      size="icon"
+                      onClick={toggleOrderedList}
+                      className="h-7 w-7 shrink-0"
+                      title="Numbered List"
+                      aria-label="Numbered List"
+                    >
+                      <ListOrdered className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant={editor.isActive('taskList') ? 'secondary' : 'ghost'}
+                      size="icon"
+                      onClick={toggleTaskList}
+                      className="h-7 w-7 shrink-0"
+                      title="Todo List"
+                      aria-label="Todo List"
+                    >
+                      <CheckSquare className="h-3.5 w-3.5" />
+                    </Button>
+
+                    <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
+
+                    {/* 3. Text Alignment Dropdown */}
+                    <DropdownMenu modal={false}>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
+                          title="Text alignment"
+                        >
+                          {(() => {
+                            if (editor.isActive({ textAlign: 'center' }))
+                              return <AlignCenter className="h-3.5 w-3.5" />;
+                            if (editor.isActive({ textAlign: 'right' }))
+                              return <AlignRight className="h-3.5 w-3.5" />;
+                            if (editor.isActive({ textAlign: 'justify' }))
+                              return <AlignJustify className="h-3.5 w-3.5" />;
+                            return <AlignLeft className="h-3.5 w-3.5" />;
+                          })()}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="center" className="w-32">
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().setTextAlign('left').run()}
+                        >
+                          <AlignLeft className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Left
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().setTextAlign('center').run()}
+                        >
+                          <AlignCenter className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Center
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().setTextAlign('right').run()}
+                        >
+                          <AlignRight className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Right
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().setTextAlign('justify').run()}
+                        >
+                          <AlignJustify className="text-muted-foreground mr-2 h-3.5 w-3.5" />{' '}
+                          Justify
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* 4. Text Color Dropdown */}
+                    <DropdownMenu modal={false}>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
+                          title="Text Color"
+                        >
+                          <span className="decoration-primary text-xs font-bold underline decoration-2">
+                            A
+                          </span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="center" className="w-36">
+                        <DropdownMenuItem onClick={() => editor.chain().focus().unsetColor().run()}>
+                          <div className="border-border bg-foreground h-3 w-3 shrink-0 rounded-full border" />
+                          Default
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().setColor('#6b7280').run()}
+                        >
+                          <div className="h-3 w-3 shrink-0 rounded-full bg-gray-500" />
+                          Gray
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().setColor('#3b82f6').run()}
+                        >
+                          <div className="h-3 w-3 shrink-0 rounded-full bg-blue-500" />
+                          Blue
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().setColor('#10b981').run()}
+                        >
+                          <div className="h-3 w-3 shrink-0 rounded-full bg-emerald-500" />
+                          Green
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().setColor('#f59e0b').run()}
+                        >
+                          <div className="h-3 w-3 shrink-0 rounded-full bg-amber-500" />
+                          Yellow
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().setColor('#ef4444').run()}
+                        >
+                          <div className="h-3 w-3 shrink-0 rounded-full bg-red-500" />
+                          Red
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().setColor('#8b5cf6').run()}
+                        >
+                          <div className="h-3 w-3 shrink-0 rounded-full bg-violet-500" />
+                          Purple
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* 5. Highlight Color Dropdown */}
+                    <DropdownMenu modal={false}>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
+                          title="Highlight Color"
+                        >
+                          <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="center" className="w-40">
+                        <DropdownMenuItem
+                          onClick={() => editor.chain().focus().unsetHighlight().run()}
+                        >
+                          <span className="text-muted-foreground mr-2 shrink-0 text-[10px] line-through">
+                            None
+                          </span>
+                          Clear Highlight
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() =>
+                            editor.chain().focus().toggleHighlight({ color: '#fef08a' }).run()
+                          }
+                        >
+                          <div className="h-3 w-3 shrink-0 rounded border border-yellow-300 bg-yellow-200" />
+                          Yellow
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            editor.chain().focus().toggleHighlight({ color: '#bfdbfe' }).run()
+                          }
+                        >
+                          <div className="h-3 w-3 shrink-0 rounded border border-blue-300 bg-blue-200" />
+                          Blue
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            editor.chain().focus().toggleHighlight({ color: '#bbf7d0' }).run()
+                          }
+                        >
+                          <div className="h-3 w-3 shrink-0 rounded border border-green-300 bg-green-200" />
+                          Green
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            editor.chain().focus().toggleHighlight({ color: '#fbcfe8' }).run()
+                          }
+                        >
+                          <div className="h-3 w-3 shrink-0 rounded border border-pink-300 bg-pink-200" />
+                          Pink
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            editor.chain().focus().toggleHighlight({ color: '#fecaca' }).run()
+                          }
+                        >
+                          <div className="h-3 w-3 shrink-0 rounded border border-red-300 bg-red-200" />
+                          Red
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            editor.chain().focus().toggleHighlight({ color: '#ddd6fe' }).run()
+                          }
+                        >
+                          <div className="h-3 w-3 shrink-0 rounded border border-violet-300 bg-violet-200" />
+                          Purple
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
+
+                    {/* 6. Link Editing */}
+                    {showLinkInput ? (
+                      <form
+                        onSubmit={applyLink}
+                        className="animate-in slide-in-from-left-2 flex shrink-0 items-center gap-1.5 px-1.5 duration-100"
+                      >
+                        <input
+                          type="url"
+                          placeholder="https://..."
+                          value={linkUrl}
+                          onChange={(e) => setLinkUrl(e.target.value)}
+                          className="border-input bg-background focus:border-primary w-28 rounded border px-2 py-0.5 text-xs outline-none"
+                          autoFocus
+                        />
+                        <Button type="submit" size="xs" className="h-6 px-2 text-[10px]">
+                          Save
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => setShowLinkInput(false)}
+                          className="text-muted-foreground hover:text-foreground text-[10px]"
+                        >
+                          Cancel
+                        </button>
+                      </form>
+                    ) : (
                       <Button
-                        variant={showAiAssist ? 'secondary' : 'ghost'}
+                        variant={editor.isActive('link') ? 'secondary' : 'ghost'}
                         size="icon"
                         onClick={() => {
-                          setAiAssistResult(null);
-                          setShowAiAssist(!showAiAssist);
+                          setLinkUrl(editor.getAttributes('link').href || '');
+                          setShowLinkInput(true);
                         }}
-                        className="text-primary hover:text-primary h-7 w-7 shrink-0"
-                        aria-label="AI Writing Assist"
-                        title="AI Improve Selection"
-                      >
-                        <Wand2 className="h-3.5 w-3.5" />
-                      </Button>
-                      <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
-                    </>
-                  )}
-
-                  {/* Undo & Redo Actions */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => editor?.chain().focus().undo().run()}
-                    disabled={!editor?.can().undo()}
-                    className="h-7 w-7 shrink-0"
-                    title="Undo (Ctrl+Z)"
-                    aria-label="Undo"
-                  >
-                    <Undo className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => editor?.chain().focus().redo().run()}
-                    disabled={!editor?.can().redo()}
-                    className="h-7 w-7 shrink-0"
-                    title="Redo (Ctrl+Y)"
-                    aria-label="Redo"
-                  >
-                    <Redo className="h-3.5 w-3.5" />
-                  </Button>
-
-                  <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
-
-                  {/* 1. Block Conversion Dropdown */}
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 shrink-0 gap-1 px-2 text-xs font-semibold"
-                        title="Convert block type"
-                      >
-                        {(() => {
-                          if (editor.isActive('heading', { level: 1 })) return 'H1';
-                          if (editor.isActive('heading', { level: 2 })) return 'H2';
-                          if (editor.isActive('heading', { level: 3 })) return 'H3';
-                          if (editor.isActive('heading', { level: 4 })) return 'H4';
-                          if (editor.isActive('heading', { level: 5 })) return 'H5';
-                          if (editor.isActive('heading', { level: 6 })) return 'H6';
-                          if (editor.isActive('bulletList')) return 'Bullet List';
-                          if (editor.isActive('orderedList')) return 'Numbered List';
-                          if (editor.isActive('taskList')) return 'Todo List';
-                          if (editor.isActive('toggleBlock')) return 'Toggle Block';
-                          if (editor.isActive('blockquote')) return 'Quote';
-                          if (editor.isActive('codeBlock')) return 'Code Block';
-                          if (editor.isActive('calloutBlock')) return 'Callout';
-                          return 'Text';
-                        })()}
-                        <ChevronDown className="h-3 w-3 opacity-60" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="max-h-64 w-44 overflow-y-auto">
-                      <DropdownMenuItem onClick={() => editor.chain().focus().setParagraph().run()}>
-                        <FileText className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Text
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-                      >
-                        <Heading1 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 1
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-                      >
-                        <Heading2 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 2
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-                      >
-                        <Heading3 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 3
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().toggleHeading({ level: 4 }).run()}
-                      >
-                        <Heading4 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 4
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().toggleHeading({ level: 5 }).run()}
-                      >
-                        <Heading5 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 5
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().toggleHeading({ level: 6 }).run()}
-                      >
-                        <Heading6 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Heading 6
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().toggleBulletList().run()}
-                      >
-                        <List className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Bullet List
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().toggleOrderedList().run()}
-                      >
-                        <ListOrdered className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Numbered
-                        List
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().toggleTaskList().run()}
-                      >
-                        <CheckSquare className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Todo List
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                      >
-                        <Quote className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Quote
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-                      >
-                        <Code2 className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Code Block
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().toggleCallout().run()}
-                      >
-                        <Lightbulb className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Callout
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
-
-                  {/* 2. Formatting Style Toggles */}
-                  <Button
-                    variant={editor.isActive('bold') ? 'secondary' : 'ghost'}
-                    size="icon"
-                    onClick={toggleBold}
-                    className="h-7 w-7 shrink-0"
-                    aria-label="Format Bold"
-                  >
-                    <Bold className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant={editor.isActive('italic') ? 'secondary' : 'ghost'}
-                    size="icon"
-                    onClick={toggleItalic}
-                    className="h-7 w-7 shrink-0"
-                    aria-label="Format Italic"
-                  >
-                    <Italic className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant={editor.isActive('underline') ? 'secondary' : 'ghost'}
-                    size="icon"
-                    onClick={toggleUnderline}
-                    className="h-7 w-7 shrink-0"
-                    aria-label="Format Underline"
-                  >
-                    <UnderlineIcon className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant={editor.isActive('strike') ? 'secondary' : 'ghost'}
-                    size="icon"
-                    onClick={toggleStrike}
-                    className="h-7 w-7 shrink-0"
-                    aria-label="Format Strikethrough"
-                  >
-                    <Strikethrough className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant={editor.isActive('code') ? 'secondary' : 'ghost'}
-                    size="icon"
-                    onClick={toggleCode}
-                    className="h-7 w-7 shrink-0"
-                    aria-label="Format Code"
-                  >
-                    <Code className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={clearFormatting}
-                    className="h-7 w-7 shrink-0"
-                    title="Clear Formatting"
-                    aria-label="Clear Formatting"
-                  >
-                    <Ban className="h-3.5 w-3.5" />
-                  </Button>
-
-                  <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
-
-                  {/* Direct List Toggles */}
-                  <Button
-                    variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'}
-                    size="icon"
-                    onClick={toggleBulletList}
-                    className="h-7 w-7 shrink-0"
-                    title="Bullet List"
-                    aria-label="Bullet List"
-                  >
-                    <List className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant={editor.isActive('orderedList') ? 'secondary' : 'ghost'}
-                    size="icon"
-                    onClick={toggleOrderedList}
-                    className="h-7 w-7 shrink-0"
-                    title="Numbered List"
-                    aria-label="Numbered List"
-                  >
-                    <ListOrdered className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant={editor.isActive('taskList') ? 'secondary' : 'ghost'}
-                    size="icon"
-                    onClick={toggleTaskList}
-                    className="h-7 w-7 shrink-0"
-                    title="Todo List"
-                    aria-label="Todo List"
-                  >
-                    <CheckSquare className="h-3.5 w-3.5" />
-                  </Button>
-
-                  <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
-
-                  {/* 3. Text Alignment Dropdown */}
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
                         className="h-7 w-7 shrink-0"
-                        title="Text alignment"
+                        aria-label="Insert Link"
                       >
-                        {(() => {
-                          if (editor.isActive({ textAlign: 'center' }))
-                            return <AlignCenter className="h-3.5 w-3.5" />;
-                          if (editor.isActive({ textAlign: 'right' }))
-                            return <AlignRight className="h-3.5 w-3.5" />;
-                          if (editor.isActive({ textAlign: 'justify' }))
-                            return <AlignJustify className="h-3.5 w-3.5" />;
-                          return <AlignLeft className="h-3.5 w-3.5" />;
-                        })()}
+                        <LinkIcon className="h-3.5 w-3.5" />
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="center" className="w-32">
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().setTextAlign('left').run()}
-                      >
-                        <AlignLeft className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Left
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().setTextAlign('center').run()}
-                      >
-                        <AlignCenter className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Center
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().setTextAlign('right').run()}
-                      >
-                        <AlignRight className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Right
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().setTextAlign('justify').run()}
-                      >
-                        <AlignJustify className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Justify
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  {/* 4. Text Color Dropdown */}
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0"
-                        title="Text Color"
-                      >
-                        <span className="decoration-primary text-xs font-bold underline decoration-2">
-                          A
-                        </span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="center" className="w-36">
-                      <DropdownMenuItem onClick={() => editor.chain().focus().unsetColor().run()}>
-                        <div className="border-border bg-foreground h-3 w-3 shrink-0 rounded-full border" />
-                        Default
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().setColor('#6b7280').run()}
-                      >
-                        <div className="h-3 w-3 shrink-0 rounded-full bg-gray-500" />
-                        Gray
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().setColor('#3b82f6').run()}
-                      >
-                        <div className="h-3 w-3 shrink-0 rounded-full bg-blue-500" />
-                        Blue
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().setColor('#10b981').run()}
-                      >
-                        <div className="h-3 w-3 shrink-0 rounded-full bg-emerald-500" />
-                        Green
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().setColor('#f59e0b').run()}
-                      >
-                        <div className="h-3 w-3 shrink-0 rounded-full bg-amber-500" />
-                        Yellow
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().setColor('#ef4444').run()}
-                      >
-                        <div className="h-3 w-3 shrink-0 rounded-full bg-red-500" />
-                        Red
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().setColor('#8b5cf6').run()}
-                      >
-                        <div className="h-3 w-3 shrink-0 rounded-full bg-violet-500" />
-                        Purple
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  {/* 5. Highlight Color Dropdown */}
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0"
-                        title="Highlight Color"
-                      >
-                        <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="center" className="w-40">
-                      <DropdownMenuItem
-                        onClick={() => editor.chain().focus().unsetHighlight().run()}
-                      >
-                        <span className="text-muted-foreground mr-2 shrink-0 text-[10px] line-through">
-                          None
-                        </span>
-                        Clear Highlight
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() =>
-                          editor.chain().focus().toggleHighlight({ color: '#fef08a' }).run()
-                        }
-                      >
-                        <div className="h-3 w-3 shrink-0 rounded border border-yellow-300 bg-yellow-200" />
-                        Yellow
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() =>
-                          editor.chain().focus().toggleHighlight({ color: '#bfdbfe' }).run()
-                        }
-                      >
-                        <div className="h-3 w-3 shrink-0 rounded border border-blue-300 bg-blue-200" />
-                        Blue
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() =>
-                          editor.chain().focus().toggleHighlight({ color: '#bbf7d0' }).run()
-                        }
-                      >
-                        <div className="h-3 w-3 shrink-0 rounded border border-green-300 bg-green-200" />
-                        Green
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() =>
-                          editor.chain().focus().toggleHighlight({ color: '#fbcfe8' }).run()
-                        }
-                      >
-                        <div className="h-3 w-3 shrink-0 rounded border border-pink-300 bg-pink-200" />
-                        Pink
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() =>
-                          editor.chain().focus().toggleHighlight({ color: '#fecaca' }).run()
-                        }
-                      >
-                        <div className="h-3 w-3 shrink-0 rounded border border-red-300 bg-red-200" />
-                        Red
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() =>
-                          editor.chain().focus().toggleHighlight({ color: '#ddd6fe' }).run()
-                        }
-                      >
-                        <div className="h-3 w-3 shrink-0 rounded border border-violet-300 bg-violet-200" />
-                        Purple
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
-
-                  {/* 6. Link Editing */}
-                  {showLinkInput ? (
-                    <form
-                      onSubmit={applyLink}
-                      className="animate-in slide-in-from-left-2 flex shrink-0 items-center gap-1.5 px-1.5 duration-100"
-                    >
-                      <input
-                        type="url"
-                        placeholder="https://..."
-                        value={linkUrl}
-                        onChange={(e) => setLinkUrl(e.target.value)}
-                        className="border-input bg-background focus:border-primary w-28 rounded border px-2 py-0.5 text-xs outline-none"
-                        autoFocus
-                      />
-                      <Button type="submit" size="xs" className="h-6 px-2 text-[10px]">
-                        Save
-                      </Button>
-                      <button
-                        type="button"
-                        onClick={() => setShowLinkInput(false)}
-                        className="text-muted-foreground hover:text-foreground text-[10px]"
-                      >
-                        Cancel
-                      </button>
-                    </form>
-                  ) : (
-                    <Button
-                      variant={editor.isActive('link') ? 'secondary' : 'ghost'}
-                      size="icon"
-                      onClick={() => {
-                        setLinkUrl(editor.getAttributes('link').href || '');
-                        setShowLinkInput(true);
-                      }}
-                      className="h-7 w-7 shrink-0"
-                      aria-label="Insert Link"
-                    >
-                      <LinkIcon className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
-              </BubbleMenu>
-            )}
-
-            {/* AI Writing Assist Diff Suggestion Popover */}
-            {showAiAssist && (
-              <div className="border-border bg-background/95 animate-in fade-in slide-in-from-top-2 absolute top-12 left-1/2 z-30 w-96 -translate-x-1/2 space-y-3 rounded-xl border p-4 shadow-2xl backdrop-blur-md duration-150">
-                <div className="border-border/30 flex items-center justify-between border-b pb-2">
-                  <span className="text-primary flex items-center gap-1 text-xs font-bold">
-                    <Wand2 className="h-3.5 w-3.5" /> AI Paragraph Assist
-                  </span>
-                  <button
-                    onClick={() => {
-                      setShowAiAssist(false);
-                      setAiAssistResult(null);
-                    }}
-                    className="text-muted-foreground hover:text-foreground text-xs"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-
-                {!aiAssistResult ? (
-                  <div className="space-y-3">
-                    <p className="text-muted-foreground text-[10px]">
-                      What changes would you like to make to the selection?
-                    </p>
-                    <input
-                      type="text"
-                      placeholder="e.g. make it professional, make it more concise..."
-                      value={aiAssistInstruction}
-                      onChange={(e) => setAiAssistInstruction(e.target.value)}
-                      className="border-input bg-background focus:border-primary focus:ring-primary/20 w-full rounded-lg border px-3 py-1.5 text-xs outline-none focus:ring-1"
-                    />
-                    <Button
-                      onClick={handleAiWritingAssist}
-                      disabled={aiAssistLoading}
-                      size="xs"
-                      className="w-full"
-                    >
-                      {aiAssistLoading ? 'Thinking...' : 'Generate Suggestion'}
-                    </Button>
-                    {aiAssistError && (
-                      <div className="flex items-start gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 p-2 text-[10px] text-red-500">
-                        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                        <span className="leading-tight">{aiAssistError}</span>
-                      </div>
                     )}
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-1 gap-2 text-[11px]">
-                      <div className="rounded-lg border border-red-500/10 bg-red-500/5 p-2 text-red-800 dark:text-red-400">
-                        <span className="block text-[9px] font-bold tracking-wider text-red-600 uppercase">
-                          Original text
-                        </span>
-                        {aiAssistResult.originalText}
-                      </div>
-                      <div className="rounded-lg border border-emerald-500/10 bg-emerald-500/5 p-2 text-emerald-800 dark:text-emerald-400">
-                        <span className="block text-[9px] font-bold tracking-wider text-emerald-600 uppercase">
-                          AI Improved text
-                        </span>
-                        {aiAssistResult.improvedText}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={handleAcceptAssist}
-                        size="xs"
-                        className="flex-1 gap-1 bg-emerald-600 hover:bg-emerald-700"
-                      >
-                        <Check className="h-3 w-3" /> Accept & Edit
-                      </Button>
-                      <Button
-                        onClick={() => setAiAssistResult(null)}
-                        variant="outline"
-                        size="xs"
-                        className="flex-1 gap-1"
-                      >
-                        <Ban className="h-3 w-3" /> Reject
-                      </Button>
-                    </div>
+                </BubbleMenu>
+              )}
+
+              {/* AI Writing Assist Diff Suggestion Popover */}
+              {showAiAssist && (
+                <div className="border-border bg-background/95 animate-in fade-in slide-in-from-top-2 absolute top-12 left-1/2 z-30 w-96 -translate-x-1/2 space-y-3 rounded-xl border p-4 shadow-2xl backdrop-blur-md duration-150">
+                  <div className="border-border/30 flex items-center justify-between border-b pb-2">
+                    <span className="text-primary flex items-center gap-1 text-xs font-bold">
+                      <Wand2 className="h-3.5 w-3.5" /> AI Paragraph Assist
+                    </span>
+                    <button
+                      onClick={() => {
+                        setShowAiAssist(false);
+                        setAiAssistResult(null);
+                      }}
+                      className="text-muted-foreground hover:text-foreground text-xs"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
-                )}
-              </div>
-            )}
 
-            {/* Notion Floating Slash Menu */}
-            {slashMenu && filteredSlashItems.length > 0 && (
-              <div
-                className="border-border bg-background/95 animate-in zoom-in-95 fixed z-50 w-64 overflow-hidden rounded-xl border p-1.5 shadow-2xl backdrop-blur-md duration-100"
-                style={{ top: `${slashMenu.y}px`, left: `${slashMenu.x}px` }}
-                role="listbox"
-                aria-label="Block creation commands"
-              >
-                <div className="text-muted-foreground border-border/20 mb-1 border-b px-2 py-1 text-[10px] font-bold uppercase">
-                  Commands
-                </div>
-                <div className="max-h-60 space-y-0.5 overflow-y-auto">
-                  {filteredSlashItems.map((item, idx) => {
-                    const Icon = item.icon;
-                    const isSelected = idx === slashSelectedIndex;
-                    return (
-                      <button
-                        key={item.name}
-                        onClick={() => executeSlashCommand(item.command)}
-                        className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors ${
-                          isSelected
-                            ? 'bg-primary text-primary-foreground'
-                            : 'hover:bg-muted text-foreground'
-                        }`}
-                        role="option"
-                        aria-selected={isSelected}
+                  {!aiAssistResult ? (
+                    <div className="space-y-3">
+                      <p className="text-muted-foreground text-[10px]">
+                        What changes would you like to make to the selection?
+                      </p>
+                      <input
+                        type="text"
+                        placeholder="e.g. make it professional, make it more concise..."
+                        value={aiAssistInstruction}
+                        onChange={(e) => setAiAssistInstruction(e.target.value)}
+                        className="border-input bg-background focus:border-primary focus:ring-primary/20 w-full rounded-lg border px-3 py-1.5 text-xs outline-none focus:ring-1"
+                      />
+                      <Button
+                        onClick={handleAiWritingAssist}
+                        disabled={aiAssistLoading}
+                        size="xs"
+                        className="w-full"
                       >
-                        <div
-                          className={`shrink-0 rounded-md p-1 ${isSelected ? 'bg-primary-foreground/10 text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+                        {aiAssistLoading ? 'Thinking...' : 'Generate Suggestion'}
+                      </Button>
+                      {aiAssistError && (
+                        <div className="flex items-start gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 p-2 text-[10px] text-red-500">
+                          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span className="leading-tight">{aiAssistError}</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 gap-2 text-[11px]">
+                        <div className="rounded-lg border border-red-500/10 bg-red-500/5 p-2 text-red-800 dark:text-red-400">
+                          <span className="block text-[9px] font-bold tracking-wider text-red-600 uppercase">
+                            Original text
+                          </span>
+                          {aiAssistResult.originalText}
+                        </div>
+                        <div className="rounded-lg border border-emerald-500/10 bg-emerald-500/5 p-2 text-emerald-800 dark:text-emerald-400">
+                          <span className="block text-[9px] font-bold tracking-wider text-emerald-600 uppercase">
+                            AI Improved text
+                          </span>
+                          {aiAssistResult.improvedText}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleAcceptAssist}
+                          size="xs"
+                          className="flex-1 gap-1 bg-emerald-600 hover:bg-emerald-700"
                         >
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="truncate">
-                          <div className="text-xs leading-tight font-bold">{item.name}</div>
-                          <div
-                            className={`text-[9px] leading-normal ${isSelected ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}
-                          >
-                            {item.desc}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
+                          <Check className="h-3 w-3" /> Accept & Edit
+                        </Button>
+                        <Button
+                          onClick={() => setAiAssistResult(null)}
+                          variant="outline"
+                          size="xs"
+                          className="flex-1 gap-1"
+                        >
+                          <Ban className="h-3 w-3" /> Reject
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* ProseMirror Editor Canvas */}
-            <EditorContent editor={editor} />
+              {/* Notion Floating Slash Menu */}
+              {slashMenu && filteredSlashItems.length > 0 && (
+                <div
+                  className="border-border bg-background/95 animate-in zoom-in-95 fixed z-50 w-64 overflow-hidden rounded-xl border p-1.5 shadow-2xl backdrop-blur-md duration-100"
+                  style={{ top: `${slashMenu.y}px`, left: `${slashMenu.x}px` }}
+                  role="listbox"
+                  aria-label="Block creation commands"
+                >
+                  <div className="text-muted-foreground border-border/20 mb-1 border-b px-2 py-1 text-[10px] font-bold uppercase">
+                    Commands
+                  </div>
+                  <div className="max-h-60 space-y-0.5 overflow-y-auto">
+                    {filteredSlashItems.map((item, idx) => {
+                      const Icon = item.icon;
+                      const isSelected = idx === slashSelectedIndex;
+                      return (
+                        <button
+                          key={item.name}
+                          onClick={() => executeSlashCommand(item.command)}
+                          className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors ${
+                            isSelected
+                              ? 'bg-primary text-primary-foreground'
+                              : 'hover:bg-muted text-foreground'
+                          }`}
+                          role="option"
+                          aria-selected={isSelected}
+                        >
+                          <div
+                            className={`shrink-0 rounded-md p-1 ${isSelected ? 'bg-primary-foreground/10 text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+                          >
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div className="truncate">
+                            <div className="text-xs leading-tight font-bold">{item.name}</div>
+                            <div
+                              className={`text-[9px] leading-normal ${isSelected ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}
+                            >
+                              {item.desc}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ProseMirror Editor Canvas */}
+              <EditorContent editor={editor} />
+            </div>
           </div>
 
           {/* Active Collaborators Presence indicator bar */}
           {activePeers.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 text-xs">
+            <div className="flex shrink-0 flex-wrap items-center gap-2 text-xs">
               <span className="text-muted-foreground font-semibold">Collaborating now:</span>
               <div className="flex flex-wrap gap-2">
                 {activePeers.map((peer, idx) => (
@@ -2730,6 +2740,15 @@ function EditorWorkspaceContent({
         description={`Are you sure you want to restore the document state to checkpoint "${pendingRestoreSnapshot?.label || ''}"? Connected peers will merge details dynamically.`}
         confirmLabel="Restore"
         onConfirm={executeRestoreSnapshot}
+      />
+
+      <ConfirmDialog
+        open={confirmTrashOpen}
+        onOpenChange={setConfirmTrashOpen}
+        title="Move to Trash"
+        description="Are you sure you want to move this document to the trash? You can restore it later from the sidebar."
+        confirmLabel="Move to Trash"
+        onConfirm={handleMoveToTrash}
       />
 
       {/* Bigger scrollable document-prose Snapshot Preview Dialog */}

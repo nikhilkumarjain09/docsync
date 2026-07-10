@@ -326,15 +326,11 @@ ul[data-type='taskList'] input[type='checkbox'] {
 /* 6. Drag Handle & Plus Gutter Positioning */
 #editor-gutter-controls {
   opacity: 0;
-  pointer-events: none;
+  pointer-events: auto;
   transition:
     opacity 0.15s ease,
     transform 0.1s ease;
-  transform: translate3d(
-    0,
-    2px,
-    0
-  ); /* Positioned by Tiptap relative to block; only offset vertical balance */
+  transform: translate3d(0, 2px, 0);
 }
 
 /* Enable pointer events and guarantee visibility when the editor reveals the gutter controls */

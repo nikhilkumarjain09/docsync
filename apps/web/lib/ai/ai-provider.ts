@@ -44,11 +44,12 @@ export async function streamTextWithFallback({
         system,
         prompt,
       });
-    } catch (err: any) {
-      console.warn('[AI] Groq streaming failed, attempting fallback to Gemini:', err.message);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn('[AI] Groq streaming failed, attempting fallback to Gemini:', errMsg);
       if (google) {
         return await streamText({
-          model: google('gemini-2.5-flash'),
+          model: google('gemini-2.0-flash'),
           system,
           prompt,
         });
@@ -60,7 +61,7 @@ export async function streamTextWithFallback({
   if (google) {
     console.log('[AI] Groq unconfigured. Streaming directly with Gemini (Flash)');
     return await streamText({
-      model: google('gemini-2.5-flash'),
+      model: google('gemini-2.0-flash'),
       system,
       prompt,
     });
@@ -91,11 +92,12 @@ export async function generateTextWithFallback({
         system,
         prompt,
       });
-    } catch (err: any) {
-      console.warn('[AI] Groq generation failed, attempting fallback to Gemini:', err.message);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn('[AI] Groq generation failed, attempting fallback to Gemini:', errMsg);
       if (google) {
         return await generateText({
-          model: google('gemini-2.5-flash'),
+          model: google('gemini-2.0-flash'),
           system,
           prompt,
         });
@@ -107,7 +109,7 @@ export async function generateTextWithFallback({
   if (google) {
     console.log('[AI] Groq unconfigured. Generating directly with Gemini (Flash)');
     return await generateText({
-      model: google('gemini-2.5-flash'),
+      model: google('gemini-2.0-flash'),
       system,
       prompt,
     });

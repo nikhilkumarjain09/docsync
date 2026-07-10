@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Copy, Check, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/shell/confirm-dialog';
 
 interface Collaborator {
   userId: string;
@@ -41,6 +42,10 @@ export function ShareDialog({
   currentUserId,
 }: ShareDialogProps) {
   const [collaborators, setCollaborators] = React.useState<Collaborator[]>([]);
+  const [collaboratorToRemove, setCollaboratorToRemove] = React.useState<{
+    userId: string;
+    nameOrEmail: string;
+  } | null>(null);
   const [loadingList, setLoadingList] = React.useState(true);
   const [inviteEmail, setInviteEmail] = React.useState('');
   const [inviteRole, setInviteRole] = React.useState<'OWNER' | 'EDITOR' | 'VIEWER'>('EDITOR');
@@ -161,7 +166,7 @@ export function ShareDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="w-[92vw] max-w-md sm:w-full">
         <DialogHeader>
           <DialogTitle>Share document</DialogTitle>
           <DialogDescription>
@@ -220,8 +225,19 @@ export function ShareDialog({
 
           <div className="max-h-[180px] scrollbar-thin space-y-2 overflow-y-auto pr-1">
             {loadingList ? (
-              <div className="flex justify-center py-6">
-                <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center justify-between gap-3 py-1">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <div className="bg-muted-foreground/10 h-8 w-8 shrink-0 animate-pulse rounded-full" />
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="bg-muted-foreground/10 h-3 w-28 animate-pulse rounded" />
+                        <div className="bg-muted-foreground/5 h-2.5 w-36 animate-pulse rounded" />
+                      </div>
+                    </div>
+                    <div className="bg-muted-foreground/10 h-6 w-16 shrink-0 animate-pulse rounded" />
+                  </div>
+                ))}
               </div>
             ) : collaborators.length === 0 ? (
               <div className="text-muted-foreground py-4 text-center text-xs italic">
@@ -267,7 +283,7 @@ export function ShareDialog({
                             )
                           }
                           disabled={isRowLoading}
-                          className="border-input bg-background h-7 rounded border px-1.5 text-[10px] font-semibold outline-none"
+                          className="border-input bg-background h-7 max-w-[80px] rounded border px-1 text-[10px] font-semibold outline-none"
                         >
                           <option value="EDITOR">Editor</option>
                           <option value="VIEWER">Viewer</option>
@@ -283,7 +299,12 @@ export function ShareDialog({
                         <Button
                           variant="ghost"
                           size="icon-xs"
-                          onClick={() => handleRemoveCollaborator(col.userId)}
+                          onClick={() =>
+                            setCollaboratorToRemove({
+                              userId: col.userId,
+                              nameOrEmail: col.user.name || col.user.email || 'Collaborator',
+                            })
+                          }
                           disabled={isRowLoading}
                           className="text-destructive hover:bg-destructive/10 h-7 w-7"
                         >
@@ -326,6 +347,22 @@ export function ShareDialog({
           </div>
         </div>
       </DialogContent>
+
+      <ConfirmDialog
+        open={!!collaboratorToRemove}
+        onOpenChange={(open) => {
+          if (!open) setCollaboratorToRemove(null);
+        }}
+        title="Remove Collaborator"
+        description={`Are you sure you want to remove "${collaboratorToRemove?.nameOrEmail || ''}"? They will lose all access to this document.`}
+        confirmLabel="Remove"
+        onConfirm={async () => {
+          if (collaboratorToRemove) {
+            await handleRemoveCollaborator(collaboratorToRemove.userId);
+            setCollaboratorToRemove(null);
+          }
+        }}
+      />
     </Dialog>
   );
 }
