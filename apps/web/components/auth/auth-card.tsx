@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState, useRef, useTransition, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { logIn, signUp, resendVerification } from '@/app/actions/auth';
+import { logIn, signUp, resendVerification, verifyOtpAction } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -86,6 +86,99 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
   const [signupPasswordVisible, setSignupPasswordVisible] = useState(false);
   const loginPwTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const signupPwTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // OTP Verification States
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
+  const [otpError, setOtpError] = useState('');
+  const [otpSuccess, setOtpSuccess] = useState(false);
+  const [otpVerifying, setOtpVerifying] = useState(false);
+
+  const otpRef0 = useRef<HTMLInputElement>(null);
+  const otpRef1 = useRef<HTMLInputElement>(null);
+  const otpRef2 = useRef<HTMLInputElement>(null);
+  const otpRef3 = useRef<HTMLInputElement>(null);
+  const otpRef4 = useRef<HTMLInputElement>(null);
+  const otpRef5 = useRef<HTMLInputElement>(null);
+
+  const otpRefs = [otpRef0, otpRef1, otpRef2, otpRef3, otpRef4, otpRef5];
+
+  const handleOtpChange = (index: number, value: string) => {
+    // Only allow single digits
+    if (value && !/^\d$/.test(value)) return;
+
+    const newDigits = [...otpDigits];
+    newDigits[index] = value;
+    setOtpDigits(newDigits);
+    setOtpError('');
+
+    // Shift focus forward if value is entered
+    if (value && index < 5) {
+      otpRefs[index + 1].current?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Shift focus backward on Backspace
+    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      otpRefs[index - 1].current?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasteData = e.clipboardData.getData('text').trim();
+    if (/^\d{6}$/.test(pasteData)) {
+      const digits = pasteData.split('');
+      setOtpDigits(digits);
+      setOtpError('');
+      // Focus the last input
+      otpRefs[5].current?.focus();
+    }
+  };
+
+  const handleOtpSubmit = useCallback(async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!pendingVerificationEmail || otpVerifying || otpSuccess) return;
+
+    const code = otpDigits.join('');
+    if (code.length !== 6) {
+      setOtpError('Please enter all 6 digits of the code.');
+      return;
+    }
+
+    setOtpVerifying(true);
+    setOtpError('');
+
+    try {
+      const res = await verifyOtpAction(pendingVerificationEmail, code);
+      if (res.success) {
+        setOtpSuccess(true);
+        // Clear all inputs
+        setOtpDigits(['', '', '', '', '', '']);
+        setTimeout(() => {
+          router.push('/');
+          router.refresh();
+        }, 1500);
+      } else {
+        setOtpError(res.error || 'Failed to verify code.');
+        // Clear all inputs and focus the first one on error
+        setOtpDigits(['', '', '', '', '', '']);
+        otpRefs[0].current?.focus();
+      }
+    } catch {
+      setOtpError('An unexpected error occurred. Please try again.');
+    } finally {
+      setOtpVerifying(false);
+    }
+  }, [otpDigits, pendingVerificationEmail, otpVerifying, otpSuccess, router, otpRefs]);
+
+  // Auto-verify when all 6 digits are filled
+  useEffect(() => {
+    const isCompleted = otpDigits.every((digit) => digit !== '');
+    if (isCompleted && pendingVerificationEmail && !otpSuccess && !otpVerifying) {
+      handleOtpSubmit();
+    }
+  }, [otpDigits, pendingVerificationEmail, otpSuccess, otpVerifying, handleOtpSubmit]);
 
   const toggleLoginPassword = useCallback(() => {
     setLoginPasswordVisible((prev) => {
@@ -454,10 +547,10 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
           const res = await resendVerification(pendingVerificationEmail);
           if (res.success) {
             setResendStatus('success');
-            setResendMessage('Verification email resent successfully.');
+            setResendMessage('Verification code resent successfully.');
           } else {
             setResendStatus('error');
-            setResendMessage(res.error || 'Failed to resend email.');
+            setResendMessage(res.error || 'Failed to resend code.');
           }
         } catch {
           setResendStatus('error');
@@ -482,49 +575,100 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
         <div className="space-y-2">
           <h3 className="text-foreground text-2xl font-bold tracking-tight">Verify your email</h3>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            We sent a verification link to <br />
-            <strong className="text-foreground font-semibold">
+            We sent a verification code to <br />
+            <strong className="text-foreground font-semibold text-wrap break-all">
               {pendingVerificationEmail}
             </strong>. <br />
-            Please click it to activate your profile.
+            Enter the 6-digit code below to activate your account.
           </p>
         </div>
 
-        <form onSubmit={handleResend} className="space-y-4">
-          {resendMessage && (
-            <div
-              className={`flex items-center justify-center gap-2 rounded-xl p-3 text-xs leading-relaxed font-medium ${
-                resendStatus === 'success'
-                  ? 'bg-emerald-500/10 text-emerald-500'
-                  : 'bg-destructive/10 text-destructive'
-              }`}
-            >
-              {resendStatus === 'success' ? (
-                <CheckCircle2 className="h-4 w-4 shrink-0" />
-              ) : (
-                <AlertCircle className="h-4 w-4 shrink-0" />
-              )}
-              {resendMessage}
+        {/* OTP Input Code Boxes */}
+        <form onSubmit={handleOtpSubmit} className="space-y-4">
+          <div className="flex justify-center gap-2.5">
+            {otpDigits.map((digit, index) => (
+              <input
+                key={index}
+                ref={otpRefs[index]}
+                type="text"
+                maxLength={1}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={digit}
+                onChange={(e) => handleOtpChange(index, e.target.value)}
+                onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                onPaste={index === 0 ? handleOtpPaste : undefined}
+                disabled={otpVerifying || otpSuccess}
+                className="border-input bg-background focus:border-primary focus:ring-primary/20 h-12 w-10 rounded-xl border text-center text-lg font-bold transition-all outline-none focus:ring-2 disabled:opacity-50 sm:h-14 sm:w-12"
+              />
+            ))}
+          </div>
+
+          {otpError && (
+            <div className="bg-destructive/10 text-destructive rounded-xl p-3 text-sm font-medium">
+              {otpError}
+            </div>
+          )}
+
+          {otpSuccess && (
+            <div className="bg-emerald-500/10 text-emerald-500 flex items-center justify-center gap-2 rounded-xl p-3 text-sm font-medium">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              Email verified! Redirecting...
             </div>
           )}
 
           <Button
             type="submit"
-            disabled={resendStatus === 'sending'}
+            disabled={otpVerifying || otpSuccess || otpDigits.some((d) => d === '')}
             className="w-full rounded-xl bg-violet-950 py-6 text-sm font-semibold text-white shadow-md transition-all duration-150 hover:bg-violet-900 active:scale-[0.99]"
           >
-            {resendStatus === 'sending' ? 'Resending Link...' : 'Resend Verification Email'}
+            {otpVerifying ? 'Verifying Code...' : 'Verify Code'}
           </Button>
         </form>
 
+        <div className="border-t border-white/10 pt-4">
+          <form onSubmit={handleResend} className="space-y-3">
+            {resendMessage && (
+              <div
+                className={`flex items-center justify-center gap-2 rounded-xl p-3 text-xs leading-relaxed font-medium ${
+                  resendStatus === 'success'
+                    ? 'bg-emerald-500/10 text-emerald-500'
+                    : 'bg-destructive/10 text-destructive'
+                }`}
+              >
+                {resendStatus === 'success' ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                )}
+                {resendMessage}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={resendStatus === 'sending' || otpSuccess}
+              className="text-primary text-xs font-semibold hover:underline focus:outline-none disabled:opacity-50"
+            >
+              {resendStatus === 'sending' ? 'Resending Code...' : "Didn't get a code? Resend Code"}
+            </button>
+          </form>
+          <p className="text-muted-foreground mt-3 text-[11px]">
+            Tip: You can also verify by clicking the link in your email.
+          </p>
+        </div>
+
         <button
           type="button"
+          disabled={otpVerifying || otpSuccess}
           onClick={() => {
             setPendingVerificationEmail(null);
             setResendStatus('idle');
             setResendMessage('');
+            setOtpError('');
+            setOtpDigits(['', '', '', '', '', '']);
           }}
-          className="text-muted-foreground hover:text-foreground mx-auto flex items-center justify-center gap-1 text-xs font-semibold transition-colors"
+          className="text-muted-foreground hover:text-foreground mx-auto flex items-center justify-center gap-1 text-xs font-semibold transition-colors disabled:opacity-50"
         >
           <ArrowLeft className="h-3 w-3" /> Back to Sign In
         </button>

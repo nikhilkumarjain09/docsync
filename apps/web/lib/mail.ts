@@ -9,7 +9,18 @@ interface SendMailParams {
 /**
  * Clean, modern responsive HTML template for authentication verification
  */
-function getVerificationHtml(email: string, verifyUrl: string): string {
+/**
+ * Clean, modern responsive HTML template for authentication verification
+ */
+function getVerificationHtml(email: string, otp: string, verifyUrl: string): string {
+  const otpSection = otp ? `
+        <p>Enter the following verification code in your browser to activate your account:</p>
+        <div class="otp-container">
+          ${otp}
+        </div>
+        <p style="margin-top: 24px; margin-bottom: 16px; font-size: 14px; color: #6b7280; text-align: center;">— OR —</p>
+  ` : '';
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -62,6 +73,7 @@ function getVerificationHtml(email: string, verifyUrl: string): string {
       margin-bottom: 16px;
       color: #111827;
       letter-spacing: -0.025em;
+      text-align: center;
     }
     p {
       font-size: 15px;
@@ -69,10 +81,24 @@ function getVerificationHtml(email: string, verifyUrl: string): string {
       color: #4b5563;
       margin-top: 0;
       margin-bottom: 24px;
+      text-align: center;
+    }
+    .otp-container {
+      background-color: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 18px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: 0.25em;
+      color: #1e1b4b;
+      text-align: center;
+      margin: 24px 0;
     }
     .btn-container {
-      margin-top: 32px;
-      margin-bottom: 32px;
+      margin-top: 24px;
+      margin-bottom: 24px;
       text-align: center;
     }
     .btn-verify {
@@ -101,11 +127,14 @@ function getVerificationHtml(email: string, verifyUrl: string): string {
       text-transform: uppercase;
       letter-spacing: 0.05em;
       margin-bottom: 6px;
+      text-align: left;
     }
     .fallback-url {
       font-size: 13px;
       color: #6366f1;
       text-decoration: none;
+      display: block;
+      text-align: left;
     }
     .footer {
       padding: 32px;
@@ -135,6 +164,11 @@ function getVerificationHtml(email: string, verifyUrl: string): string {
       p {
         color: #cbd5e1 !important;
       }
+      .otp-container {
+        background-color: #0f172a !important;
+        border-color: #334155 !important;
+        color: #f8fafc !important;
+      }
       .fallback-container {
         background-color: #0f172a !important;
       }
@@ -157,13 +191,15 @@ function getVerificationHtml(email: string, verifyUrl: string): string {
       </div>
       <div class="content">
         <h1>Verify your email address</h1>
-        <p>Thank you for signing up for DocSync! To activate your account and start co-authoring documents in real-time, please verify your email address by clicking the button below.</p>
+        <p>Thank you for signing up for DocSync! To activate your account and start co-authoring documents in real-time, please verify your email address.</p>
         
+        ${otpSection}
+
         <div class="btn-container">
           <a href="${verifyUrl}" class="btn-verify" target="_blank">Verify Email Address</a>
         </div>
 
-        <p>This verification link is valid for <strong>24 hours</strong>. If you did not sign up for a DocSync account, you can safely ignore this email.</p>
+        <p>This verification request is valid for <strong>24 hours</strong>. If you did not sign up for a DocSync account, you can safely ignore this email.</p>
         
         <div class="fallback-container">
           <div class="fallback-title">Button not working? Copy this URL:</div>
@@ -253,16 +289,22 @@ async function sendMail({ to, subject, html }: SendMailParams) {
  * Public method to send verification emails
  */
 export async function sendVerificationEmail(email: string, token: string) {
+  let otp = '';
+  if (token.includes(':')) {
+    const parts = token.split(':');
+    otp = parts[0];
+  }
+
   let baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
   if (!process.env.NEXTAUTH_URL && process.env.VERCEL_URL) {
     baseUrl = `https://${process.env.VERCEL_URL}`;
   }
   const verifyUrl = `${baseUrl}/verify?token=${token}`;
-  const html = getVerificationHtml(email, verifyUrl);
+  const html = getVerificationHtml(email, otp, verifyUrl);
 
   await sendMail({
     to: email,
-    subject: 'Verify your email address - DocSync',
+    subject: otp ? `${otp} is your DocSync verification code` : 'Verify your email address - DocSync',
     html,
   });
 }

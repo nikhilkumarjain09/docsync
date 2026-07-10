@@ -43,8 +43,10 @@ export async function signUp(prevState: any, formData: FormData) {
       },
     });
 
-    // Generate secure verification token
-    const token = randomBytes(32).toString('hex');
+    // Generate secure 6-digit OTP code and a long secure token
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const secureToken = randomBytes(32).toString('hex');
+    const token = `${otp}:${secureToken}`;
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours expiry
 
     await db.verificationToken.create({
@@ -159,7 +161,9 @@ export async function resendVerification(email: string) {
     await db.verificationToken.deleteMany({ where: { email } });
 
     // 4. Generate new token
-    const token = randomBytes(32).toString('hex');
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const secureToken = randomBytes(32).toString('hex');
+    const token = `${otp}:${secureToken}`;
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours expiry
 
     await db.verificationToken.create({
@@ -229,5 +233,59 @@ export async function verifyTokenAction(token: string) {
   } catch (error) {
     console.error('[AUTH] Token verification error:', error);
     return { error: 'Something went wrong during email verification.' };
+  }
+}
+
+/**
+ * Validates a 6-digit OTP code, updates user status to verified, and deletes token
+ */
+export async function verifyOtpAction(email: string, otp: string) {
+  if (!email || !otp) {
+    return { error: 'Email and verification code are required.' };
+  }
+
+  const cleanOtp = otp.trim();
+  if (!/^\d{6}$/.test(cleanOtp)) {
+    return { error: 'Verification code must be exactly 6 digits.' };
+  }
+
+  try {
+    // 1. Look up the active verification token for this email
+    const dbToken = await db.verificationToken.findFirst({
+      where: { email },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!dbToken) {
+      return { error: 'No active verification code found for this email. Please request a new one.' };
+    }
+
+    // 2. Check if token has expired
+    if (dbToken.expires < new Date()) {
+      await db.verificationToken.deleteMany({ where: { email } });
+      return { error: 'This verification code has expired. Please request a new one.' };
+    }
+
+    // 3. Extract and check the OTP part
+    const [dbOtp] = dbToken.token.split(':');
+    if (dbOtp !== cleanOtp) {
+      return { error: 'Invalid verification code. Please check and try again.' };
+    }
+
+    // 4. Mark user email as verified
+    await db.user.update({
+      where: { email },
+      data: { emailVerified: new Date() },
+    });
+
+    // 5. Delete all tokens for this email to prevent reuse
+    await db.verificationToken.deleteMany({
+      where: { email },
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('[AUTH] OTP verification error:', error);
+    return { error: 'Something went wrong during code verification.' };
   }
 }
