@@ -1,7 +1,7 @@
 /**
  * @file sync-scheduler.ts
  * @description Real-time WebSocket synchronization client for local-first Yjs documents.
- * 
+ *
  * Manages instant pushes over WebSocket connection when online, local outbox buffering when
  * offline, dynamic reconnection backoff, and Yjs awareness presence sharing.
  */
@@ -42,19 +42,19 @@ export class SyncScheduler {
   private ws: WebSocket | null = null;
   private status: ConnectionStatus = 'offline';
   private statusListeners = new Set<(status: ConnectionStatus) => void>();
-  private reconnectTimeoutId: any | null = null;
+  private reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = 2000;
   private lastSeenLogIdKey: string;
   private isProcessingOutbox = false;
 
   // Yjs Awareness instance for tracking cursor/selection presence
   public awareness: awarenessProtocol.Awareness;
-  
+
   constructor(documentId: string, doc: Y.Doc, user?: { id: string; name?: string | null }) {
     this.documentId = documentId;
     this.doc = doc;
     this.lastSeenLogIdKey = `docsync-last-seen-id:${documentId}`;
-    
+
     // 1. Initialize Yjs Awareness
     this.awareness = new awarenessProtocol.Awareness(doc);
 
@@ -73,7 +73,28 @@ export class SyncScheduler {
 
     // 4. Bind local awareness update listener to send updates over WS
     this.awareness.on('update', this.handleLocalAwarenessUpdate);
+
+    // 5. Bind browser-level network status event listeners
+    if (typeof window !== 'undefined') {
+      window.addEventListener('offline', this.handleBrowserOffline);
+      window.addEventListener('online', this.handleBrowserOnline);
+      if (!navigator.onLine) {
+        this.status = 'offline';
+      }
+    }
   }
+
+  private handleBrowserOffline = () => {
+    console.log('[SyncScheduler] Browser went offline. Disconnecting WebSocket.');
+    this.setStatus('offline');
+    this.disconnect();
+  };
+
+  private handleBrowserOnline = () => {
+    console.log('[SyncScheduler] Browser went online. Reconnecting WebSocket.');
+    this.setStatus('connecting');
+    this.connect();
+  };
 
   /**
    * Register a status listener.
@@ -88,7 +109,7 @@ export class SyncScheduler {
     if (this.status === nextStatus) return;
     this.status = nextStatus;
     console.log(`[SyncScheduler] Connection status: ${nextStatus}`);
-    this.statusListeners.forEach(listener => listener(nextStatus));
+    this.statusListeners.forEach((listener) => listener(nextStatus));
   }
 
   public getStatus(): ConnectionStatus {
@@ -98,7 +119,7 @@ export class SyncScheduler {
   /**
    * Local Yjs document change handler. Save to IndexedDB outbox and send instantly if online.
    */
-  private handleLocalUpdate = async (update: Uint8Array, origin: any) => {
+  private handleLocalUpdate = async (update: Uint8Array, origin: unknown) => {
     // Skip updates that come from server sync loop
     if (origin === 'server-sync' || origin === this) {
       return;
@@ -106,7 +127,7 @@ export class SyncScheduler {
 
     try {
       await addToOutbox(this.documentId, update);
-      
+
       // If WebSocket is open and authenticated, trigger outbox drain instantly
       if (this.status === 'synced' || this.status === 'syncing') {
         this.drainOutbox();
@@ -122,11 +143,15 @@ export class SyncScheduler {
   private handleLocalAwarenessUpdate = () => {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       try {
-        const localState = awarenessProtocol.encodeAwarenessUpdate(this.awareness, [this.doc.clientID]);
-        this.ws.send(JSON.stringify({
-          type: 'awareness',
-          update: toBase64(localState),
-        }));
+        const localState = awarenessProtocol.encodeAwarenessUpdate(this.awareness, [
+          this.doc.clientID,
+        ]);
+        this.ws.send(
+          JSON.stringify({
+            type: 'awareness',
+            update: toBase64(localState),
+          }),
+        );
       } catch (e) {
         console.error('[SyncScheduler] Failed to send awareness updates:', e);
       }
@@ -154,11 +179,13 @@ export class SyncScheduler {
   public broadcastUpdate(base64Update: string, logId: string) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       console.log(`[SyncScheduler] Broadcasting pre-persisted sync update log: ${logId}`);
-      this.ws.send(JSON.stringify({
-        type: 'sync',
-        update: base64Update,
-        id: logId,
-      }));
+      this.ws.send(
+        JSON.stringify({
+          type: 'sync',
+          update: base64Update,
+          id: logId,
+        }),
+      );
     }
   }
 
@@ -171,6 +198,11 @@ export class SyncScheduler {
     this.doc.off('update', this.handleLocalUpdate);
     this.awareness.off('update', this.handleLocalAwarenessUpdate);
     this.awareness.destroy();
+
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('offline', this.handleBrowserOffline);
+      window.removeEventListener('online', this.handleBrowserOnline);
+    }
   }
 
   private disconnect() {
@@ -187,6 +219,11 @@ export class SyncScheduler {
   private async connect() {
     this.disconnect();
 
+    if (typeof window !== 'undefined' && !navigator.onLine) {
+      this.setStatus('offline');
+      return;
+    }
+
     try {
       // 1. Fetch encrypted JWT token from Next.js server
       const tokenRes = await fetch('/api/auth/ws-token');
@@ -198,14 +235,14 @@ export class SyncScheduler {
       // 2. Open WebSocket connection pointing to Relay port
       // Dynamically resolve base URL to handle localhost, local IP network access, or production host
       let resolvedWsUrl = serverWsUrl;
-      
+
       if (typeof window !== 'undefined') {
         const hostname = window.location.hostname;
-        const isLocal = 
-          hostname === 'localhost' || 
-          hostname === '127.0.0.1' || 
-          hostname.startsWith('192.168.') || 
-          hostname.startsWith('10.') || 
+        const isLocal =
+          hostname === 'localhost' ||
+          hostname === '127.0.0.1' ||
+          hostname.startsWith('192.168.') ||
+          hostname.startsWith('10.') ||
           hostname.startsWith('172.');
 
         if (isLocal) {
@@ -230,10 +267,10 @@ export class SyncScheduler {
       };
 
       this.ws.onmessage = async (event) => {
-        let msg: any;
+        let msg: { type: string; update?: string; lastSeenLogId?: string; id?: string };
         try {
           msg = JSON.parse(event.data.toString());
-        } catch (e) {
+        } catch {
           console.warn('[SyncScheduler] Invalid WS payload received.');
           return;
         }
@@ -248,10 +285,10 @@ export class SyncScheduler {
           if (lastSeenLogId) {
             localStorage.setItem(this.lastSeenLogIdKey, lastSeenLogId);
           }
-          
+
           this.setStatus('synced');
           console.log('[SyncScheduler] Y.Doc state initialized from server logs.');
-          
+
           // Instantly drain any local offline edits to catch up
           this.drainOutbox();
         } else if (msg.type === 'sync') {
@@ -276,7 +313,7 @@ export class SyncScheduler {
       this.ws.onclose = (event) => {
         console.log(`[SyncScheduler] WebSocket closed. Code: ${event.code}`);
         this.setStatus('offline');
-        
+
         // Handle unauthorized closes cleanly (e.g. close code 4001, no role)
         if (event.code === 4001) {
           console.error('[SyncScheduler] Access Forbidden. Disabling reconnect loop.');
@@ -291,9 +328,9 @@ export class SyncScheduler {
         console.error('[SyncScheduler] WebSocket client error:', err);
         this.setStatus('offline');
       };
-
-    } catch (err: any) {
-      console.error('[SyncScheduler] Connection setup failed:', err.message);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error('[SyncScheduler] Connection setup failed:', errMsg);
       this.setStatus('offline');
       this.scheduleReconnect();
     }
@@ -331,15 +368,17 @@ export class SyncScheduler {
         }
 
         console.log(`[SyncScheduler] Draining outbox: pushing ${pending.length} pending updates.`);
-        
+
         for (const item of pending) {
           const base64Update = toBase64(item.update);
-          
+
           // Send update over socket
-          this.ws.send(JSON.stringify({
-            type: 'sync',
-            update: base64Update,
-          }));
+          this.ws.send(
+            JSON.stringify({
+              type: 'sync',
+              update: base64Update,
+            }),
+          );
 
           // Clear outbox item
           await removeUpdates([item.id]);
@@ -347,8 +386,9 @@ export class SyncScheduler {
       }
       console.log('[SyncScheduler] Outbox successfully drained.');
       this.setStatus('synced');
-    } catch (e: any) {
-      console.error('[SyncScheduler] Failed to drain outbox:', e.message);
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      console.error('[SyncScheduler] Failed to drain outbox:', errMsg);
       this.setStatus('offline');
     } finally {
       this.isProcessingOutbox = false;

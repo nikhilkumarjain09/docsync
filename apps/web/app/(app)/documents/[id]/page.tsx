@@ -1255,6 +1255,12 @@ function EditorWorkspaceContent({
     setPreviewText('');
     setIsPreviewOpen(true);
 
+    if (typeof window !== 'undefined' && !navigator.onLine) {
+      setPreviewText('Offline Mode: Snapshot preview is unavailable while offline.');
+      setIsPreviewLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch(`/api/documents/${documentId}/snapshots/${snapshot.id}`);
       if (!res.ok) throw new Error();
@@ -1272,7 +1278,11 @@ function EditorWorkspaceContent({
       setPreviewText(xmlFragment.toString() || '(Empty document)');
       tempDoc.destroy();
     } catch {
-      setPreviewText('Failed to render snapshot preview.');
+      if (typeof window !== 'undefined' && !navigator.onLine) {
+        setPreviewText('Offline Mode: Snapshot preview is unavailable while offline.');
+      } else {
+        setPreviewText('Failed to render snapshot preview.');
+      }
     } finally {
       setIsPreviewLoading(false);
     }
@@ -1563,7 +1573,7 @@ function EditorWorkspaceContent({
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                className="border-border/80 bg-popover text-popover-foreground animate-in fade-in slide-in-from-top-1 z-50 w-64 rounded-xl border p-1.5 shadow-lg duration-100"
+                className="border-border/80 w-64 p-1.5 shadow-lg duration-75"
               >
                 {/* Action Search Input */}
                 <div className="relative mb-1 px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
