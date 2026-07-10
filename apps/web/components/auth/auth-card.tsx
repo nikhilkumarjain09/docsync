@@ -559,6 +559,60 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
       });
     };
 
+    if (otpSuccess) {
+      return (
+        <motion.div
+          key="otp-success-screen"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.3 }}
+          className="flex w-full flex-col items-center justify-center py-6 text-center"
+        >
+          {/* Premium Animated Green Checkmark SVG */}
+          <div className="relative flex h-20 w-20 items-center justify-center">
+            {/* Pulsing background outer ring */}
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: [1, 1.18, 1], opacity: [0.1, 0.25, 0.1] }}
+              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+              className="absolute inset-0 rounded-full bg-emerald-500"
+            />
+            {/* Soft backdrop fill ring */}
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 0.1 }}
+              className="absolute inset-2 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20"
+            />
+            {/* Self-drawing SVG path checkmark */}
+            <svg className="h-9 w-9 text-emerald-500 z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
+              <motion.path
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{ duration: 0.5, ease: 'easeOut', delay: 0.3 }}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.55, duration: 0.25 }}
+            className="mt-6 space-y-2"
+          >
+            <h3 className="text-foreground text-2xl font-bold tracking-tight">Verification Successful!</h3>
+            <p className="text-muted-foreground text-sm">
+              Your account is active. Redirecting you to DocSync...
+            </p>
+          </motion.div>
+        </motion.div>
+      );
+    }
+
     return (
       <motion.div
         key="verification-pending-container"
@@ -607,13 +661,6 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
           {otpError && (
             <div className="bg-destructive/10 text-destructive rounded-xl p-3 text-sm font-medium">
               {otpError}
-            </div>
-          )}
-
-          {otpSuccess && (
-            <div className="bg-emerald-500/10 text-emerald-500 flex items-center justify-center gap-2 rounded-xl p-3 text-sm font-medium">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-              Email verified! Redirecting...
             </div>
           )}
 
