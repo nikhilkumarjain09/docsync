@@ -2048,7 +2048,7 @@ function EditorWorkspaceContent({
                     },
                   } as any)}
                 >
-                  <div className="border-border bg-background/95 animate-in zoom-in-95 flex max-w-[90vw] flex-wrap items-center gap-1 rounded-xl border p-1.5 shadow-xl backdrop-blur-md duration-100">
+                  <div className="border-border bg-background/98 animate-in zoom-in-95 flex max-w-[90vw] flex-wrap items-center gap-1 rounded-xl border p-1.5 shadow-xl duration-75">
                     {/* AI Writing Assist Button */}
                     {isAiConfigured && (
                       <>
@@ -2514,7 +2514,7 @@ function EditorWorkspaceContent({
 
               {/* AI Writing Assist Diff Suggestion Popover */}
               {showAiAssist && (
-                <div className="border-border bg-background/95 animate-in fade-in slide-in-from-top-2 absolute top-12 left-1/2 z-30 w-[90vw] max-w-sm -translate-x-1/2 space-y-3 rounded-xl border p-4 shadow-2xl backdrop-blur-md duration-150">
+                <div className="border-border bg-background/98 animate-in fade-in slide-in-from-top-1 absolute top-12 left-1/2 z-30 w-[90vw] max-w-sm -translate-x-1/2 space-y-3 rounded-xl border p-4 shadow-2xl duration-75">
                   <div className="border-border/30 flex items-center justify-between border-b pb-2">
                     <span className="text-primary flex items-center gap-1 text-xs font-bold">
                       <Wand2 className="h-3.5 w-3.5" /> AI Paragraph Assist
@@ -2602,7 +2602,7 @@ function EditorWorkspaceContent({
               {/* Notion Floating Slash Menu */}
               {slashMenu && filteredSlashItems.length > 0 && (
                 <div
-                  className="border-border bg-background/95 animate-in zoom-in-95 fixed z-50 w-64 overflow-hidden rounded-xl border p-1.5 shadow-2xl backdrop-blur-md duration-100"
+                  className="border-border bg-background/98 animate-in zoom-in-95 fixed z-50 w-64 overflow-hidden rounded-xl border p-1.5 shadow-2xl duration-75"
                   style={{ top: `${slashMenu.y}px`, left: `${slashMenu.x}px` }}
                   role="listbox"
                   aria-label="Block creation commands"
@@ -2702,8 +2702,8 @@ function EditorWorkspaceContent({
 
       {/* Mobile sidebar sliding sheet */}
       {isSidebarOpen && (
-        <div className="bg-background/60 fixed inset-0 z-50 flex justify-end backdrop-blur-xs lg:hidden">
-          <div className="border-border bg-card animate-in slide-in-from-right relative h-full w-80 overflow-y-auto border-l p-6 shadow-2xl duration-200">
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 lg:hidden">
+          <div className="border-border bg-card animate-in slide-in-from-right relative h-full w-80 overflow-y-auto border-l p-6 shadow-2xl duration-100">
             <Button
               variant="ghost"
               size="icon"
@@ -2777,9 +2777,9 @@ function EditorWorkspaceContent({
 
       {/* Slide-over sheet/sidebar to view all versions */}
       {isAllVersionsOpen && (
-        <div className="bg-background/60 fixed inset-0 z-50 flex justify-end backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
           <div className="absolute inset-0" onClick={() => setIsAllVersionsOpen(false)} />
-          <div className="border-border bg-card animate-in slide-in-from-right relative z-10 flex h-full w-[380px] max-w-full flex-col border-l p-6 shadow-2xl duration-200">
+          <div className="border-border bg-card animate-in slide-in-from-right relative z-10 flex h-full w-[380px] max-w-full flex-col border-l p-6 shadow-2xl duration-100">
             <div className="flex items-center justify-between border-b pb-4">
               <div>
                 <h3 className="text-foreground text-base font-bold">All Checkpoints</h3>
