@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useState, useRef, useTransition } from 'react';
+import { useActionState, useEffect, useState, useRef, useTransition, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { logIn, signUp, resendVerification } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,12 @@ import {
   ArrowLeft,
   CheckCircle2,
   AlertCircle,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
+
+/** Duration in ms to keep the password visible before auto-hiding (industry standard: 2-5s). */
+const PASSWORD_REVEAL_DURATION_MS = 3000;
 
 // Premium document synchronization card mockup graphic
 function AuthGraphic() {
@@ -75,6 +80,46 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
   );
   const [resendMessage, setResendMessage] = useState('');
   const [, startTransition] = useTransition();
+
+  // Password visibility state with auto-hide timer
+  const [loginPasswordVisible, setLoginPasswordVisible] = useState(false);
+  const [signupPasswordVisible, setSignupPasswordVisible] = useState(false);
+  const loginPwTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const signupPwTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const toggleLoginPassword = useCallback(() => {
+    setLoginPasswordVisible((prev) => {
+      if (loginPwTimerRef.current) clearTimeout(loginPwTimerRef.current);
+      if (!prev) {
+        loginPwTimerRef.current = setTimeout(
+          () => setLoginPasswordVisible(false),
+          PASSWORD_REVEAL_DURATION_MS,
+        );
+      }
+      return !prev;
+    });
+  }, []);
+
+  const toggleSignupPassword = useCallback(() => {
+    setSignupPasswordVisible((prev) => {
+      if (signupPwTimerRef.current) clearTimeout(signupPwTimerRef.current);
+      if (!prev) {
+        signupPwTimerRef.current = setTimeout(
+          () => setSignupPasswordVisible(false),
+          PASSWORD_REVEAL_DURATION_MS,
+        );
+      }
+      return !prev;
+    });
+  }, []);
+
+  // Clean up timers on unmount
+  useEffect(() => {
+    return () => {
+      if (loginPwTimerRef.current) clearTimeout(loginPwTimerRef.current);
+      if (signupPwTimerRef.current) clearTimeout(signupPwTimerRef.current);
+    };
+  }, []);
 
   // Refs for focus management
   const loginEmailRef = useRef<HTMLInputElement>(null);
@@ -239,14 +284,25 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
               Forgot password?
             </a>
           </div>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            placeholder="••••••••"
-            required
-            className="border-input bg-background focus:border-primary focus:ring-primary/20 w-full rounded-xl border px-4 py-2.5 text-sm transition-all outline-none focus:ring-2"
-          />
+          <div className="relative">
+            <input
+              id="password"
+              name="password"
+              type={loginPasswordVisible ? 'text' : 'password'}
+              placeholder="••••••••"
+              required
+              className="border-input bg-background focus:border-primary focus:ring-primary/20 w-full rounded-xl border px-4 py-2.5 pr-11 text-sm transition-all outline-none focus:ring-2"
+            />
+            <button
+              type="button"
+              onClick={toggleLoginPassword}
+              className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 transition-colors focus:outline-none"
+              aria-label={loginPasswordVisible ? 'Hide password' : 'Show password'}
+              tabIndex={-1}
+            >
+              {loginPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         {loginState?.error && (
@@ -335,14 +391,25 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
           >
             Password
           </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            placeholder="••••••••"
-            required
-            className="border-input bg-background focus:border-primary focus:ring-primary/20 w-full rounded-xl border px-4 py-2.5 text-sm transition-all outline-none focus:ring-2"
-          />
+          <div className="relative">
+            <input
+              id="signup-password"
+              name="password"
+              type={signupPasswordVisible ? 'text' : 'password'}
+              placeholder="••••••••"
+              required
+              className="border-input bg-background focus:border-primary focus:ring-primary/20 w-full rounded-xl border px-4 py-2.5 pr-11 text-sm transition-all outline-none focus:ring-2"
+            />
+            <button
+              type="button"
+              onClick={toggleSignupPassword}
+              className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 transition-colors focus:outline-none"
+              aria-label={signupPasswordVisible ? 'Hide password' : 'Show password'}
+              tabIndex={-1}
+            >
+              {signupPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         {signupState?.error && (
