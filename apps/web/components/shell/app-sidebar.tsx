@@ -15,7 +15,7 @@ import {
   MoreHorizontal,
   Settings,
   LogOut,
-  FileCheck,
+
   Undo,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -244,9 +244,11 @@ export function AppSidebar() {
       {/* Top action and Title */}
       <div className="border-sidebar-border flex items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="from-primary flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-tr to-violet-500 shadow-md">
-            <FileCheck className="text-primary-foreground h-4 w-4" />
-          </div>
+          <img
+            src="/assets/docsyncIcon.png"
+            alt="DocSync"
+            className="h-7 w-7 rounded-lg object-contain shadow-md"
+          />
           <span className="from-foreground to-foreground/80 bg-gradient-to-r bg-clip-text text-sm font-bold tracking-tight">
             DocSync Workspace
           </span>
