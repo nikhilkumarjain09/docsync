@@ -12,10 +12,10 @@ import {
   Trash2,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   MoreHorizontal,
   Settings,
   LogOut,
-
   Undo,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -43,10 +43,109 @@ interface DocumentItem {
   updatedAt: string;
 }
 
-export function AppSidebar() {
+export function AppSidebar({
+  width,
+  setWidth,
+  isCollapsed,
+  setIsCollapsed,
+  isResizing,
+  setIsResizing,
+}: {
+  width: number;
+  setWidth: (w: number) => void;
+  isCollapsed: boolean;
+  setIsCollapsed: (c: boolean) => void;
+  isResizing: boolean;
+  setIsResizing: (r: boolean) => void;
+}) {
   const { data: session } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+
+  // Resize Handlers
+  const startResizing = React.useCallback((mouseDownEvent: React.MouseEvent) => {
+    mouseDownEvent.preventDefault();
+    setIsResizing(true);
+  }, [setIsResizing]);
+
+  const stopResizing = React.useCallback(() => {
+    setIsResizing(false);
+  }, [setIsResizing]);
+
+  const resize = React.useCallback(
+    (mouseMoveEvent: MouseEvent) => {
+      if (isResizing) {
+        const newWidth = mouseMoveEvent.clientX;
+        if (newWidth >= 180 && newWidth <= 450) {
+          setWidth(newWidth);
+          localStorage.setItem('sidebar_width', String(newWidth));
+        }
+      }
+    },
+    [isResizing, setWidth]
+  );
+
+  React.useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', resize);
+      window.addEventListener('mouseup', stopResizing);
+    } else {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+    }
+    return () => {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+    };
+  }, [isResizing, resize, stopResizing]);
+
+  // Context Menu State
+  const [contextMenu, setContextMenu] = React.useState<{
+    x: number;
+    y: number;
+    docId: string;
+    docTitle: string;
+    isFavorite: boolean;
+  } | null>(null);
+
+  React.useEffect(() => {
+    const handleCloseMenu = () => setContextMenu(null);
+    window.addEventListener('click', handleCloseMenu);
+    window.addEventListener('contextmenu', handleCloseMenu);
+    return () => {
+      window.removeEventListener('click', handleCloseMenu);
+      window.removeEventListener('contextmenu', handleCloseMenu);
+    };
+  }, []);
+
+  const handleContextMenu = React.useCallback((e: React.MouseEvent, docId: string, docTitle: string, isFavorite: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Bounds check
+    const menuWidth = 160;
+    const menuHeight = 220;
+    const screenWidth = window.innerWidth;
+    const screenHeight = window.innerHeight;
+    
+    let adjustedX = e.clientX;
+    let adjustedY = e.clientY;
+    
+    if (adjustedX + menuWidth > screenWidth) {
+      adjustedX = screenWidth - menuWidth - 8;
+    }
+    if (adjustedY + menuHeight > screenHeight) {
+      adjustedY = screenHeight - menuHeight - 8;
+    }
+    
+    setContextMenu({
+      x: adjustedX,
+      y: adjustedY,
+      docId,
+      docTitle,
+      isFavorite,
+    });
+  }, []);
 
   // Dialog open states
   const [createOpen, setCreateOpen] = React.useState(false);
@@ -240,9 +339,27 @@ export function AppSidebar() {
   const sharedDocs = documents.filter((doc) => doc.ownerId !== userId);
 
   return (
-    <div className="border-border bg-sidebar text-sidebar-foreground flex h-full w-64 flex-col border-r select-none">
+    <div
+      style={{
+        width: isCollapsed ? 0 : width,
+        transition: isResizing ? 'none' : 'width 250ms cubic-bezier(0.4, 0, 0.2, 1)',
+      }}
+      className={`border-border bg-sidebar text-sidebar-foreground flex h-full flex-col border-r select-none relative group/sidebar ${
+        isResizing ? 'select-none' : ''
+      } ${isCollapsed ? 'border-r-0' : ''} overflow-hidden`}
+    >
+      {/* Resize Handle */}
+      {!isCollapsed && (
+        <div
+          onMouseDown={startResizing}
+          className="absolute top-0 right-0 z-50 h-full w-1.5 cursor-col-resize hover:bg-primary/40 active:bg-primary/60 transition-colors group/resize"
+        >
+          <div className="absolute right-0 top-0 h-full w-[1px] bg-border group-hover/resize:bg-primary/50" />
+        </div>
+      )}
+
       {/* Top action and Title */}
-      <div className="border-sidebar-border flex items-center justify-between border-b px-4 py-3">
+      <div className="border-sidebar-border flex items-center justify-between border-b px-4 py-3 shrink-0">
         <div className="flex items-center gap-2">
           <img
             src="/assets/docsyncIcon.png"
@@ -253,6 +370,18 @@ export function AppSidebar() {
             DocSync Workspace
           </span>
         </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            setIsCollapsed(true);
+            localStorage.setItem('sidebar_collapsed_state', 'true');
+          }}
+          className="text-muted-foreground hover:text-foreground h-7 w-7 rounded-md cursor-pointer hover:bg-sidebar-accent"
+          title="Collapse sidebar"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
       </div>
 
       {/* Persistent create and search actions */}
@@ -305,6 +434,7 @@ export function AppSidebar() {
                     doc={doc}
                     isFavorited={true}
                     onFavorite={() => handleToggleFavorite(doc.id)}
+                    onContextMenu={(e) => handleContextMenu(e, doc.id, doc.title, true)}
                     onRename={() => {
                       setActiveDocId(doc.id);
                       setActiveDocTitle(doc.title);
@@ -354,6 +484,7 @@ export function AppSidebar() {
                     doc={doc}
                     isFavorited={favorites.some((f) => f.id === doc.id)}
                     onFavorite={() => handleToggleFavorite(doc.id)}
+                    onContextMenu={(e) => handleContextMenu(e, doc.id, doc.title, favorites.some((f) => f.id === doc.id))}
                     onRename={() => {
                       setActiveDocId(doc.id);
                       setActiveDocTitle(doc.title);
@@ -403,6 +534,7 @@ export function AppSidebar() {
                     doc={doc}
                     isFavorited={favorites.some((f) => f.id === doc.id)}
                     onFavorite={() => handleToggleFavorite(doc.id)}
+                    onContextMenu={(e) => handleContextMenu(e, doc.id, doc.title, favorites.some((f) => f.id === doc.id))}
                     onRename={() => {
                       setActiveDocId(doc.id);
                       setActiveDocTitle(doc.title);
@@ -640,6 +772,88 @@ export function AppSidebar() {
           />
         </>
       )}
+
+      {/* Floating Right-Click Context Menu */}
+      {contextMenu && (
+        <div
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          className="fixed z-50 min-w-[170px] overflow-hidden rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-md animate-in fade-in-50 zoom-in-95 duration-100 select-none"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+            Document Actions
+          </div>
+          <div className="my-1 border-t border-border/40" />
+          <button
+            onClick={() => {
+              router.push(`/documents/${contextMenu.docId}`);
+              setContextMenu(null);
+            }}
+            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-left font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer transition-colors"
+          >
+            Open Document
+          </button>
+          <button
+            onClick={() => {
+              window.open(`/documents/${contextMenu.docId}`, '_blank');
+              setContextMenu(null);
+            }}
+            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-left font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer transition-colors"
+          >
+            Open in New Tab
+          </button>
+          <button
+            onClick={() => {
+              handleToggleFavorite(contextMenu.docId);
+              setContextMenu(null);
+            }}
+            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-left font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer transition-colors"
+          >
+            {contextMenu.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+          </button>
+          <button
+            onClick={() => {
+              setActiveDocId(contextMenu.docId);
+              setActiveDocTitle(contextMenu.docTitle);
+              setRenameOpen(true);
+              setContextMenu(null);
+            }}
+            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-left font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer transition-colors"
+          >
+            Rename
+          </button>
+          <button
+            onClick={() => {
+              handleDuplicate(contextMenu.docId);
+              setContextMenu(null);
+            }}
+            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-left font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer transition-colors"
+          >
+            Duplicate
+          </button>
+          <button
+            onClick={() => {
+              setActiveDocId(contextMenu.docId);
+              setShareOpen(true);
+              setContextMenu(null);
+            }}
+            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-left font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer transition-colors"
+          >
+            Share settings
+          </button>
+          <div className="my-1 border-t border-border/40" />
+          <button
+            onClick={() => {
+              setActiveDocId(contextMenu.docId);
+              setConfirmDeleteOpen(true);
+              setContextMenu(null);
+            }}
+            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-left font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive cursor-pointer transition-colors"
+          >
+            Move to Trash
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -661,6 +875,7 @@ function DocumentRow({
   onDuplicate,
   onDelete,
   onShare,
+  onContextMenu,
 }: {
   doc: DocumentItem;
   isFavorited: boolean;
@@ -669,6 +884,7 @@ function DocumentRow({
   onDuplicate: () => void;
   onDelete: () => void;
   onShare: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -677,6 +893,7 @@ function DocumentRow({
   return (
     <div
       onClick={() => router.push(`/documents/${doc.id}`)}
+      onContextMenu={onContextMenu}
       className={`group flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition-all ${
         isActive
           ? 'bg-sidebar-accent text-sidebar-accent-foreground font-semibold'

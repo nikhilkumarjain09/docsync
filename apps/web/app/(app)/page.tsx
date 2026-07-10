@@ -152,9 +152,6 @@ export default function DashboardPage() {
                         <h4 className="group-hover:text-primary text-sm leading-snug font-bold break-words transition-colors">
                           {doc.title}
                         </h4>
-                        <div className="text-muted-foreground truncate font-mono text-[10px] select-all">
-                          ID: {doc.id}
-                        </div>
                       </div>
                       <div className="text-muted-foreground border-border/40 flex w-full items-center gap-1.5 border-t pt-3 text-[10px]">
                         <Clock className="h-3 w-3 shrink-0" />
