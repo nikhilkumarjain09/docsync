@@ -1,15 +1,19 @@
 import type { NextConfig } from 'next';
 import path from 'path';
 
-const nextConfig = {
+const nextConfig: NextConfig = {
   /* config options here */
   serverExternalPackages: ['yjs', 'y-prosemirror'],
+  outputFileTracingIncludes: {
+    '/**/*': ['../../packages/db/dist/generated/client/libquery_engine-*.node'],
+  },
   turbopack: {
     resolveAlias: {
       yjs: './node_modules/yjs',
       'y-prosemirror': './node_modules/y-prosemirror',
     },
   },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   webpack: (config: any) => {
     config.resolve.alias = {
       ...config.resolve.alias,
@@ -18,6 +22,6 @@ const nextConfig = {
     };
     return config;
   },
-} as any;
+};
 
 export default nextConfig;
