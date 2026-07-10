@@ -71,23 +71,23 @@ async function main() {
   console.log('══════════════════════════════════════════════════════\n');
 
   // ─── Setup: Find existing test data ─────────────────────────────────
-  const alice = await superDb.user.findFirst({ where: { email: 'alice@docsync.dev' } });
-  const bob = await superDb.user.findFirst({ where: { email: 'bob@docsync.dev' } });
+  const nikhil = await superDb.user.findFirst({ where: { email: 'nikhil.wevois@gmail.com' } });
+  const mahima = await superDb.user.findFirst({ where: { email: 'jainmahima922@gmail.com' } });
 
-  if (!alice || !bob) {
+  if (!nikhil || !mahima) {
     console.error('ERROR: Seed data not found. Run `npx prisma db seed` first.');
     process.exit(1);
   }
 
-  const doc = await superDb.document.findFirst({ where: { ownerId: alice.id } });
+  const doc = await superDb.document.findFirst({ where: { ownerId: nikhil.id } });
   if (!doc) {
-    console.error('ERROR: No document found for Alice. Run `npx prisma db seed` first.');
+    console.error('ERROR: No document found for Nikhil. Run `npx prisma db seed` first.');
     process.exit(1);
   }
 
   const ghostUserId = 'ghost-user-no-access-12345';
 
-  console.log(`  Test data: Alice=${alice.id}, Bob=${bob.id}, Doc=${doc.id}`);
+  console.log(`  Test data: Nikhil=${nikhil.id}, Mahima=${mahima.id}, Doc=${doc.id}`);
 
   // ─── Create non-superuser test role ─────────────────────────────────
   // RLS is NOT enforced for superusers even with FORCE ROW LEVEL SECURITY.
@@ -108,8 +108,12 @@ async function main() {
 
     // Grant necessary permissions on the schema and tables
     await superDb.$executeRawUnsafe(`GRANT USAGE ON SCHEMA public TO ${TEST_ROLE};`);
-    await superDb.$executeRawUnsafe(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${TEST_ROLE};`);
-    await superDb.$executeRawUnsafe(`GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO ${TEST_ROLE};`);
+    await superDb.$executeRawUnsafe(
+      `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${TEST_ROLE};`,
+    );
+    await superDb.$executeRawUnsafe(
+      `GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO ${TEST_ROLE};`,
+    );
   } catch (e: any) {
     console.error('Failed to create test role:', e.message);
     process.exit(1);
@@ -124,9 +128,11 @@ async function main() {
   try {
     // Verify we're actually connected as the non-superuser
     const roleInfo = await appDb.$queryRawUnsafe<any[]>(
-      'SELECT current_user, rolsuper FROM pg_roles WHERE rolname = current_user'
+      'SELECT current_user, rolsuper FROM pg_roles WHERE rolname = current_user',
     );
-    console.log(`  Connected as: ${roleInfo[0]?.current_user} (superuser=${roleInfo[0]?.rolsuper})\n`);
+    console.log(
+      `  Connected as: ${roleInfo[0]?.current_user} (superuser=${roleInfo[0]?.rolsuper})\n`,
+    );
 
     if (roleInfo[0]?.rolsuper === true) {
       console.error('ERROR: Still connected as superuser. RLS test would be meaningless.');
@@ -141,17 +147,17 @@ async function main() {
         await tx.$executeRawUnsafe(`SET LOCAL app.current_user_id = '';`);
         const result = await tx.$queryRawUnsafe<any[]>(
           `SELECT * FROM "Document" WHERE "id" = $1`,
-          doc.id
+          doc.id,
         );
         return result;
       });
+      assert('No context → Document', rows.length === 0, `Expected 0 rows, got ${rows.length}`);
+    } catch (e: any) {
       assert(
         'No context → Document',
-        rows.length === 0,
-        `Expected 0 rows, got ${rows.length}`
+        true,
+        `Query threw (RLS enforcement): ${e.message.slice(0, 80)}`,
       );
-    } catch (e: any) {
-      assert('No context → Document', true, `Query threw (RLS enforcement): ${e.message.slice(0, 80)}`);
     }
 
     // ─── Test 2: Ghost user (non-collaborator) → zero rows ────────
@@ -161,17 +167,17 @@ async function main() {
         await tx.$executeRawUnsafe(`SET LOCAL app.current_user_id = '${ghostUserId}';`);
         const result = await tx.$queryRawUnsafe<any[]>(
           `SELECT * FROM "Document" WHERE "id" = $1`,
-          doc.id
+          doc.id,
         );
         return result;
       });
+      assert('Ghost user → Document', rows.length === 0, `Expected 0 rows, got ${rows.length}`);
+    } catch (e: any) {
       assert(
         'Ghost user → Document',
-        rows.length === 0,
-        `Expected 0 rows, got ${rows.length}`
+        true,
+        `Query threw (RLS enforcement): ${e.message.slice(0, 80)}`,
       );
-    } catch (e: any) {
-      assert('Ghost user → Document', true, `Query threw (RLS enforcement): ${e.message.slice(0, 80)}`);
     }
 
     // Test ghost user on DocumentUpdateLog
@@ -180,17 +186,17 @@ async function main() {
         await tx.$executeRawUnsafe(`SET LOCAL app.current_user_id = '${ghostUserId}';`);
         const result = await tx.$queryRawUnsafe<any[]>(
           `SELECT * FROM "DocumentUpdateLog" WHERE "documentId" = $1`,
-          doc.id
+          doc.id,
         );
         return result;
       });
+      assert('Ghost user → UpdateLog', rows.length === 0, `Expected 0 rows, got ${rows.length}`);
+    } catch (e: any) {
       assert(
         'Ghost user → UpdateLog',
-        rows.length === 0,
-        `Expected 0 rows, got ${rows.length}`
+        true,
+        `Query threw (RLS enforcement): ${e.message.slice(0, 80)}`,
       );
-    } catch (e: any) {
-      assert('Ghost user → UpdateLog', true, `Query threw (RLS enforcement): ${e.message.slice(0, 80)}`);
     }
 
     // Test ghost user on DocumentSnapshot
@@ -199,17 +205,17 @@ async function main() {
         await tx.$executeRawUnsafe(`SET LOCAL app.current_user_id = '${ghostUserId}';`);
         const result = await tx.$queryRawUnsafe<any[]>(
           `SELECT * FROM "DocumentSnapshot" WHERE "documentId" = $1`,
-          doc.id
+          doc.id,
         );
         return result;
       });
+      assert('Ghost user → Snapshot', rows.length === 0, `Expected 0 rows, got ${rows.length}`);
+    } catch (e: any) {
       assert(
         'Ghost user → Snapshot',
-        rows.length === 0,
-        `Expected 0 rows, got ${rows.length}`
+        true,
+        `Query threw (RLS enforcement): ${e.message.slice(0, 80)}`,
       );
-    } catch (e: any) {
-      assert('Ghost user → Snapshot', true, `Query threw (RLS enforcement): ${e.message.slice(0, 80)}`);
     }
 
     // Test ghost user on DocumentCollaborator
@@ -218,66 +224,57 @@ async function main() {
         await tx.$executeRawUnsafe(`SET LOCAL app.current_user_id = '${ghostUserId}';`);
         const result = await tx.$queryRawUnsafe<any[]>(
           `SELECT * FROM "DocumentCollaborator" WHERE "documentId" = $1`,
-          doc.id
+          doc.id,
         );
         return result;
       });
+      assert('Ghost user → Collaborator', rows.length === 0, `Expected 0 rows, got ${rows.length}`);
+    } catch (e: any) {
       assert(
         'Ghost user → Collaborator',
-        rows.length === 0,
-        `Expected 0 rows, got ${rows.length}`
+        true,
+        `Query threw (RLS enforcement): ${e.message.slice(0, 80)}`,
       );
-    } catch (e: any) {
-      assert('Ghost user → Collaborator', true, `Query threw (RLS enforcement): ${e.message.slice(0, 80)}`);
     }
 
-    // ─── Test 3: Alice (owner + collaborator) → gets rows ─────────
-    console.log('\nTest 3: Query with Alice (document owner & collaborator)');
+    // ─── Test 3: Nikhil (owner + collaborator) → gets rows ─────────
+    console.log('\nTest 3: Query with Nikhil (document owner & collaborator)');
     try {
       const rows = await appDb.$transaction(async (tx) => {
-        await tx.$executeRawUnsafe(`SET LOCAL app.current_user_id = '${alice.id}';`);
+        await tx.$executeRawUnsafe(`SET LOCAL app.current_user_id = '${nikhil.id}';`);
         const result = await tx.$queryRawUnsafe<any[]>(
           `SELECT * FROM "Document" WHERE "id" = $1`,
-          doc.id
+          doc.id,
         );
         return result;
       });
-      assert(
-        'Alice → Document',
-        rows.length === 1,
-        `Expected 1 row, got ${rows.length}`
-      );
+      assert('Nikhil → Document', rows.length === 1, `Expected 1 row, got ${rows.length}`);
     } catch (e: any) {
-      assert('Alice → Document', false, `Unexpected error: ${e.message.slice(0, 100)}`);
+      assert('Nikhil → Document', false, `Unexpected error: ${e.message.slice(0, 100)}`);
     }
 
-    // ─── Test 4: Bob (collaborator VIEWER) → gets rows ────────────
-    console.log('\nTest 4: Query with Bob (VIEWER collaborator)');
+    // ─── Test 4: Mahima (collaborator VIEWER) → gets rows ────────────
+    console.log('\nTest 4: Query with Mahima (VIEWER collaborator)');
     try {
       const rows = await appDb.$transaction(async (tx) => {
-        await tx.$executeRawUnsafe(`SET LOCAL app.current_user_id = '${bob.id}';`);
+        await tx.$executeRawUnsafe(`SET LOCAL app.current_user_id = '${mahima.id}';`);
         const result = await tx.$queryRawUnsafe<any[]>(
           `SELECT * FROM "Document" WHERE "id" = $1`,
-          doc.id
+          doc.id,
         );
         return result;
       });
-      assert(
-        'Bob → Document',
-        rows.length === 1,
-        `Expected 1 row, got ${rows.length}`
-      );
+      assert('Mahima → Document', rows.length === 1, `Expected 1 row, got ${rows.length}`);
     } catch (e: any) {
-      assert('Bob → Document', false, `Unexpected error: ${e.message.slice(0, 100)}`);
+      assert('Mahima → Document', false, `Unexpected error: ${e.message.slice(0, 100)}`);
     }
-
   } finally {
     await appDb.$disconnect();
   }
 
   // ─── Summary ───────────────────────────────────────────────────────
   console.log('\n══════════════════════════════════════════════════════');
-  const passed = results.filter(r => r.passed).length;
+  const passed = results.filter((r) => r.passed).length;
   const total = results.length;
   const allPassed = passed === total;
   console.log(`  Results: ${passed}/${total} passed ${allPassed ? '✅' : '❌'}`);

@@ -16,9 +16,9 @@ export const metadata: Metadata = {
   title: 'DocSync',
   description: 'Local-first collaborative document editor',
   icons: {
-    icon: [{ url: '/docsyncIcon.png', type: 'image/png' }],
-    shortcut: '/docsyncIcon.png',
-    apple: '/docsyncIcon.png',
+    icon: [{ url: '/assets/docsyncIcon.png', type: 'image/png' }],
+    shortcut: '/assets/docsyncIcon.png',
+    apple: '/assets/docsyncIcon.png',
   },
 };
 

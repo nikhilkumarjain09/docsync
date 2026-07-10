@@ -217,7 +217,7 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
             id="email"
             name="email"
             type="email"
-            placeholder="alice@docsync.dev"
+            placeholder="nikhiljain@docsync.dev"
             required
             className="border-input bg-background focus:border-primary focus:ring-primary/20 w-full rounded-xl border px-4 py-2.5 text-sm transition-all outline-none focus:ring-2"
           />
@@ -305,7 +305,7 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
             id="name"
             name="name"
             type="text"
-            placeholder="Alice Vance"
+            placeholder="Nikhil Jain"
             required
             className="border-input bg-background focus:border-primary focus:ring-primary/20 w-full rounded-xl border px-4 py-2.5 text-sm transition-all outline-none focus:ring-2"
           />
@@ -322,7 +322,7 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
             id="email"
             name="email"
             type="email"
-            placeholder="alice@docsync.dev"
+            placeholder="nikhiljain@docsync.dev"
             required
             className="border-input bg-background focus:border-primary focus:ring-primary/20 w-full rounded-xl border px-4 py-2.5 text-sm transition-all outline-none focus:ring-2"
           />
@@ -392,7 +392,7 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
             setResendStatus('error');
             setResendMessage(res.error || 'Failed to resend email.');
           }
-        } catch (_err) {
+        } catch {
           setResendStatus('error');
           setResendMessage('An error occurred. Please try again.');
         }

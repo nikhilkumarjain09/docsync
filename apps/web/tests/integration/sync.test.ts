@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { POST } from '@/app/api/documents/[id]/sync/route';
 import { auth } from '@/auth';
@@ -15,7 +16,7 @@ describe('Sync API Route Integration Tests', () => {
   const editorId = 'user-editor';
   const viewerId = 'user-viewer';
   const strangerId = 'user-stranger';
-  
+
   let testDb: any = null;
 
   // Seed test data in the Postgres database
@@ -36,7 +37,7 @@ describe('Sync API Route Integration Tests', () => {
       ],
     });
 
-    // Create document (Alice/Owner context)
+    // Create document (Nikhil/Owner context)
     await db.document.create({
       data: {
         id: docId,
@@ -66,14 +67,19 @@ describe('Sync API Route Integration Tests', () => {
       END
       $$;
     `);
-    await db.$executeRawUnsafe(`GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO docsync_app_test;`);
-    await db.$executeRawUnsafe(`GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO docsync_app_test;`);
+    await db.$executeRawUnsafe(
+      `GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO docsync_app_test;`,
+    );
+    await db.$executeRawUnsafe(
+      `GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO docsync_app_test;`,
+    );
 
     // Construct a restricted Prisma client to enforce RLS (superuser bypasses RLS)
-    const superuserUrl = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/docsync';
+    const superuserUrl =
+      process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/docsync';
     const testDbUrl = superuserUrl.replace(
       /postgresql:\/\/([^:]+):([^@]+)@/,
-      'postgresql://docsync_app_test:docsync_app_test@'
+      'postgresql://docsync_app_test:docsync_app_test@',
     );
     testDb = new PrismaClient({ datasources: { db: { url: testDbUrl } } });
   });
@@ -164,7 +170,7 @@ describe('Sync API Route Integration Tests', () => {
     const pullRes = await POST(pullReq, { params: Promise.resolve({ id: docId }) });
     expect(pullRes.status).toBe(200);
     const pullBody = await pullRes.json();
-    
+
     // Assert: the update pushed is present in the pull logs
     expect(pullBody.updates.length).toBeGreaterThan(0);
     expect(pullBody.updates[0].update).toBe(updatePayload);

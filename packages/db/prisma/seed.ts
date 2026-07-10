@@ -16,7 +16,7 @@ async function main() {
   const nikhilPassword = await bcrypt.hash('Nikhil@12', 10);
   const mahimaPassword = await bcrypt.hash('Mahima@12', 10);
 
-  const alice = await prisma.user.create({
+  const nikhil = await prisma.user.create({
     data: {
       email: 'nikhil.wevois@gmail.com',
       name: 'Nikhil Jain',
@@ -35,10 +35,10 @@ async function main() {
   const doc = await prisma.document.create({
     data: {
       title: 'DocSync Architecture Spec',
-      ownerId: alice.id,
+      ownerId: nikhil.id,
       collaborators: {
         create: [
-          { userId: alice.id, role: Role.OWNER },
+          { userId: nikhil.id, role: Role.OWNER },
           { userId: bob.id, role: Role.VIEWER },
         ],
       },
@@ -46,7 +46,7 @@ async function main() {
   });
 
   console.log('Seed completed successfully:');
-  console.log(`- Created User (Alice): ${alice.email}`);
+  console.log(`- Created User (Nikhil): ${nikhil.email}`);
   console.log(`- Created User (Bob): ${bob.email}`);
   console.log(`- Created Document: "${doc.title}" (ID: ${doc.id})`);
 }

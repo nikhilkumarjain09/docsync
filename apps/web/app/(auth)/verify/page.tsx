@@ -39,7 +39,7 @@ function VerifyContent() {
           setStatus('error');
           setErrorMessage(res.error || 'Verification failed.');
         }
-      } catch (_err) {
+      } catch {
         setStatus('error');
         setErrorMessage('An unexpected error occurred during email verification.');
       }
@@ -66,7 +66,7 @@ function VerifyContent() {
           setResendStatus('error');
           setResendMessage(res.error || 'Failed to resend verification link.');
         }
-      } catch (_err) {
+      } catch {
         setResendStatus('error');
         setResendMessage('Something went wrong. Please try again.');
       }
@@ -127,7 +127,7 @@ function VerifyContent() {
                   <Mail className="text-muted-foreground/75 absolute left-3.5 h-4 w-4" />
                   <input
                     type="email"
-                    placeholder="alice@docsync.dev"
+                    placeholder="nikhiljain@docsync.dev"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
