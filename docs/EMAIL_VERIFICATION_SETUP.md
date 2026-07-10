@@ -1,6 +1,6 @@
-# Email Verification Setup Guide
+# Email Verification Setup Guide (No Domain Required)
 
-This guide describes how to configure and verify the email verification system for DocSync in both local development and production.
+This guide describes how to configure and verify the email verification system for DocSync. **You do NOT need to own a custom domain to set this up or test it.**
 
 ---
 
@@ -16,23 +16,42 @@ DocSync uses a secure, rate-limited email verification flow during user signup. 
 
 ---
 
-## 2. Required Accounts & Services
+## 2. Setup Options (No Domain Required)
 
-To run email verification in production, you must set up an email provider. We recommend **Resend** for its developer experience, free tier, and easy integration.
+You have three options to run and test email verification without owning a custom domain:
 
-### Resend Setup (Production Option)
+### Option A: Resend Testing Sandbox (Recommended for quick API testing)
 
-1. **Create Account**: Register an account on [Resend](https://resend.com).
-2. **Add Domain**: Under "Domains", add your custom domain (e.g., `docsync.dev`).
-3. **Configure DNS**:
-   Add the generated DNS records to your domain provider (GoDaddy, Namecheap, Cloudflare, etc.):
-   - **DKIM** (TXT records)
-   - **SPF** (TXT records)
-4. **Generate API Key**: Go to "API Keys" -> Click "Create API Key" with "Sending Access" -> Copy the key.
+Resend allows you to send emails using their default testing domain (`onboarding@resend.dev`) to your **own registered account email address** without configuring any DNS or domain settings.
+
+1. **Create Account**: Register a free account on [Resend](https://resend.com). The email address you use to sign up becomes your authorized testing email.
+2. **Generate API Key**: Go to the Resend dashboard -> "API Keys" -> Click "Create API Key" with "Sending Access" -> Copy the key.
+3. **Configure Environment Variables**:
+   - Set `RESEND_API_KEY` to your key.
+   - Set `EMAIL_FROM` to `"DocSync <onboarding@resend.dev>"`.
+4. **Test**: You can now sign up a user in DocSync using **your Resend account email address**. Resend will deliver the email directly to your inbox. _(Note: In Sandbox mode, you can only send emails to yourself)._
+
+### Option B: Local SMTP Sandbox via Mailtrap (Recommended for full multi-user testing)
+
+Mailtrap provides a fake SMTP server for development. It intercepts all outgoing emails and lets you view them in a browser dashboard. It does not require any domain setup and can send mock emails to any address.
+
+1. **Create Account**: Register a free account on [Mailtrap](https://mailtrap.io).
+2. **Get Credentials**: Go to "Email Sandbox" -> "Inboxes" -> select "My Inbox" -> copy the SMTP credentials (host, port, username, password).
+3. **Configure Environment Variables**:
+   - Leave `RESEND_API_KEY` empty/commented out.
+   - Set SMTP environment variables (see below).
+4. **Test**: You can now sign up with **any email address** (e.g. `test@example.com`). The email will instantly appear in your Mailtrap inbox dashboard.
+
+### Option C: Console Fallback (Zero Setup / Offline)
+
+If neither Resend nor SMTP is configured, the application automatically falls back to printing verification links directly to your console.
+
+1. **Configure**: Leave `RESEND_API_KEY` and `SMTP_HOST` empty or undefined.
+2. **Test**: Sign up with any email address. Check your **terminal/server logs** to find the verification link, copy-paste it into your browser, and confirm activation.
 
 ---
 
-## 3. Environment Variables
+## 3. Environment Variables Configuration
 
 Add the following variables to your `.env` (local) or your hosting platform's dashboard (production):
 
@@ -41,80 +60,49 @@ Add the following variables to your `.env` (local) or your hosting platform's da
 # EMAIL VERIFICATION CONFIGURATION
 # ==============================================================================
 
-# The sender email address. Must be verified/authorized by your provider.
-# In local development without Resend, this can be anything.
+# NextAuth Base URL (Used to construct the verification link)
+NEXTAUTH_URL="http://localhost:3000"
+
+# The sender email address.
+# - For Resend Sandbox (Option A), this MUST be: "DocSync <onboarding@resend.dev>"
+# - For Mailtrap/Console (Option B/C), this can be anything.
 EMAIL_FROM="DocSync <onboarding@resend.dev>"
 
-# Option A: Resend API Key (Recommended for Staging/Production)
-# Obtain this from the Resend Dashboard. If present, it will be used.
+
+# OPTION A: RESEND SANDBOX API
+# If this key is present, Resend will be used to send to your registered email.
 RESEND_API_KEY="re_123456789abcdef"
 
-# Option B: SMTP Configuration (Fallback for local dev or custom SMTP provider)
-# If RESEND_API_KEY is not defined, the system falls back to this configuration.
-# To test locally using Mailtrap/Mailpit, configure these:
+
+# OPTION B: SMTP SANDBOX (e.g. Mailtrap)
+# Comment out RESEND_API_KEY and configure these to use SMTP intercept.
 SMTP_HOST="sandbox.smtp.mailtrap.io"
 SMTP_PORT=2525
 SMTP_USER="your_mailtrap_smtp_user"
 SMTP_PASS="your_mailtrap_smtp_password"
-SMTP_SECURE="false" # set to "true" if using SSL (typically port 465)
-
-# NextAuth Base URL (Used to construct the verification link)
-NEXTAUTH_URL="http://localhost:3000"
+SMTP_SECURE="false"
 ```
 
 ---
 
-## 4. Local Development Testing
+## 4. Local Development Testing Flow
 
-If neither `RESEND_API_KEY` nor `SMTP_HOST` are configured, the application falls back to a **Console Logger**.
-
-### How to test with Console Logger (No Setup Required):
-
-1. Sign up a new user via the `/signup` page.
-2. The UI will show the "Verify your email" screen.
-3. Check your **terminal/console logs**. You will see a block like:
-   ```text
-   ==================================================
-   [MAIL DEV FALLBACK] Verification email for: alice@docsync.dev
-   Subject: Verify your email address - DocSync
-   Verification Link: http://localhost:3000/verify?token=abc123xyz...
-   ==================================================
-   ```
-4. Copy-paste the verification link into your browser.
-5. You will see the "Email Verified!" success page. Click "Log In" and log in successfully!
-
-### How to test with Mailtrap/Mailpit (SMTP Setup):
-
-1. Create a free account on [Mailtrap](https://mailtrap.io).
-2. Create an Email Sandbox inbox and copy the SMTP credentials.
-3. Add the `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASS` settings to your `.env` file.
-4. Sign up a new user. The email will be sent and will appear in your Mailtrap inbox.
+1. **Register**: Go to `/signup` and fill out the registration form.
+2. **Inbox Check**:
+   - If using **Resend Sandbox**: check the inbox of your Resend account email.
+   - If using **Mailtrap**: check your Mailtrap dashboard inbox.
+   - If using **Console**: check your server terminal output.
+3. **Verify**: Click the link (`http://localhost:3000/verify?token=...`). The page will display "Email Verified!".
+4. **Log In**: Click "Log In to DocSync" and authenticate successfully.
 
 ---
 
-## 5. Production Deployment Checklist
+## 5. Troubleshooting
 
-Before deploying to production, verify:
+#### 1. "Sending limit exceeded" or "Unauthorized recipient" (Resend Option)
 
-- [ ] Your custom sending domain is fully verified on Resend (DKIM, SPF status: "Verified").
-- [ ] `EMAIL_FROM` matches your verified sending domain (e.g. `no-reply@yourdomain.com`).
-- [ ] `RESEND_API_KEY` is added to production environment variables.
-- [ ] `NEXTAUTH_URL` is set to your production domain (e.g. `https://docsync.dev`).
-- [ ] SSL/HTTPS is enabled (verification pages require HTTPS for cookie/session security).
+- This happens if you try to sign up a user in Resend Sandbox mode with an email address other than your own Resend login email. To send to anyone, you must verify a custom domain under "Domains" in the Resend dashboard.
 
----
-
-## 6. Troubleshooting
-
-#### 1. Email not arriving (Spam folder)
-
-- Ensure your sending domain has correct SPF, DKIM, and DMARC records configured in DNS.
-- During testing, check the spam/junk folder.
-
-#### 2. Expired Verification Link
+#### 2. Verification Link Expired
 
 - Verification links expire in 24 hours. Users will see a warning. They can enter their email on the `/verify` page and click "Send Verification Link" to get a fresh link instantly.
-
-#### 3. Rate Limit Warnings
-
-- Resend token action has a 60-second rate limit to prevent SMTP spamming. If requested too frequently, users will be prompted to wait.
