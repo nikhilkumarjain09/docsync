@@ -1552,7 +1552,7 @@ function EditorWorkspaceContent({
                         <ChevronDown className="h-3 w-3 opacity-60" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="max-h-64 w-44 overflow-y-auto">
+                    <DropdownMenuContent portaled={false} align="start" className="max-h-64 w-44 overflow-y-auto">
                       <DropdownMenuItem onClick={() => editor.chain().focus().setParagraph().run()}>
                         <FileText className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Text
                       </DropdownMenuItem>
@@ -1737,7 +1737,7 @@ function EditorWorkspaceContent({
                         })()}
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="center" className="w-32">
+                    <DropdownMenuContent portaled={false} align="center" className="w-32">
                       <DropdownMenuItem
                         onClick={() => editor.chain().focus().setTextAlign('left').run()}
                       >
@@ -1775,7 +1775,7 @@ function EditorWorkspaceContent({
                         </span>
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="center" className="w-36">
+                    <DropdownMenuContent portaled={false} align="center" className="w-36">
                       <DropdownMenuItem onClick={() => editor.chain().focus().unsetColor().run()}>
                         <div className="border-border bg-foreground h-3 w-3 shrink-0 rounded-full border" />
                         Default
@@ -1831,7 +1831,7 @@ function EditorWorkspaceContent({
                         <Sparkles className="h-3.5 w-3.5 text-amber-500" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="center" className="w-40">
+                    <DropdownMenuContent portaled={false} align="center" className="w-40">
                       <DropdownMenuItem
                         onClick={() => editor.chain().focus().unsetHighlight().run()}
                       >

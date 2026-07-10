@@ -170,7 +170,7 @@ export function ShareDialog({
         </DialogHeader>
 
         {isOwner && (
-          <form onSubmit={handleInvite} className="flex items-center gap-2">
+          <form onSubmit={handleInvite} className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Input
               type="email"
               placeholder="Enter email address"
@@ -178,22 +178,24 @@ export function ShareDialog({
               onChange={(e) => setInviteEmail(e.target.value)}
               disabled={isInviting}
               required
-              className="flex-1"
+              className="flex-1 min-w-0"
             />
-            <select
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as 'OWNER' | 'EDITOR' | 'VIEWER')}
-              disabled={isInviting}
-              className="border-input bg-background h-9 rounded-lg border px-2 text-sm outline-none"
-            >
-              <option value="EDITOR">Editor</option>
-              <option value="VIEWER">Viewer</option>
-              <option value="OWNER">Owner</option>
-            </select>
-            <Button type="submit" disabled={isInviting} className="shrink-0 gap-1.5">
-              {isInviting && <Loader2 className="h-3 w-3 animate-spin" />}
-              Invite
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <select
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value as 'OWNER' | 'EDITOR' | 'VIEWER')}
+                disabled={isInviting}
+                className="border-input bg-background h-9 rounded-lg border px-2 text-sm outline-none flex-1 sm:flex-initial"
+              >
+                <option value="EDITOR">Editor</option>
+                <option value="VIEWER">Viewer</option>
+                <option value="OWNER">Owner</option>
+              </select>
+              <Button type="submit" disabled={isInviting} className="gap-1.5 flex-1 sm:flex-initial">
+                {isInviting && <Loader2 className="h-3 w-3 animate-spin" />}
+                Invite
+              </Button>
+            </div>
           </form>
         )}
 
@@ -216,14 +218,14 @@ export function ShareDialog({
                 const isColMe = col.userId === currentUserId;
                 const isRowLoading = !!loadingRows[col.userId];
                 return (
-                  <div key={col.userId} className="flex items-center justify-between py-1 text-xs">
-                    <div className="flex max-w-[60%] items-center gap-2">
-                      <Avatar className="h-8 w-8">
+                  <div key={col.userId} className="flex items-center justify-between gap-3 py-1 text-xs">
+                    <div className="flex flex-1 min-w-0 items-center gap-2">
+                      <Avatar className="h-8 w-8 shrink-0">
                         <AvatarFallback>
                           {(col.user.name || col.user.email || 'U').slice(0, 2)}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="truncate">
+                      <div className="flex-1 min-w-0">
                         <div className="truncate font-bold">
                           {col.user.name || col.user.email} {isColMe && '(You)'}
                         </div>
@@ -233,7 +235,7 @@ export function ShareDialog({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex shrink-0 items-center gap-1.5">
                       {isRowLoading ? (
                         <Loader2 className="text-muted-foreground mr-1 h-3 w-3 animate-spin" />
                       ) : null}
@@ -279,8 +281,8 @@ export function ShareDialog({
           </div>
         </div>
 
-        <div className="border-border/50 flex items-center justify-between gap-3 border-t pt-4">
-          <div className="bg-muted text-muted-foreground flex-1 truncate rounded-lg px-3 py-2 font-mono text-[11px] select-all">
+        <div className="border-border/50 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center justify-between">
+          <div className="bg-muted text-muted-foreground flex-1 min-w-0 truncate rounded-lg px-3 py-2 font-mono text-[11px] select-all">
             {documentId
               ? `${window.location.origin}/documents/${documentId}`
               : 'Generating link...'}
@@ -291,7 +293,7 @@ export function ShareDialog({
             size="sm"
             onClick={handleCopyLink}
             disabled={!documentId}
-            className="shrink-0 gap-1.5"
+            className="sm:shrink-0 gap-1.5 w-full sm:w-auto"
           >
             {isCopied ? (
               <Check className="h-3.5 w-3.5 text-emerald-600" />
