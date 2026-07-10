@@ -25,7 +25,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuPortal,
+  DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Tiptap core & Starter Kit
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -124,6 +129,13 @@ import {
   Calendar,
   Paperclip,
   Bookmark,
+  Lock,
+  Unlock,
+  Type,
+  Maximize2,
+  Globe,
+  MessageSquare,
+  Files,
 } from 'lucide-react';
 
 interface PageProps {
@@ -184,16 +196,7 @@ export default function DocumentPage({ params }: PageProps) {
   }, [sessionStatus, router]);
 
   if (sessionStatus === 'loading' || sessionStatus === 'unauthenticated' || !session) {
-    return (
-      <div className="from-background to-muted/30 flex min-h-screen items-center justify-center bg-radial">
-        <div className="space-y-2 text-center">
-          <div className="border-primary mx-auto h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"></div>
-          <p className="text-muted-foreground animate-pulse text-sm">
-            Entering secure workspace...
-          </p>
-        </div>
-      </div>
-    );
+    return <DocumentWorkspaceSkeleton message="Entering secure workspace..." />;
   }
 
   return (
@@ -202,6 +205,80 @@ export default function DocumentPage({ params }: PageProps) {
       userId={session.user.id}
       userName={session.user.name || session.user.email}
     />
+  );
+}
+
+function DocumentWorkspaceSkeleton({ message }: { message: string }) {
+  return (
+    <div className="from-background to-muted/20 flex h-screen flex-col overflow-hidden bg-radial">
+      {/* Skeleton Top Header */}
+      <header className="border-border/40 bg-background/80 sticky top-0 z-10 border-b backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-9 w-9 rounded-xl" />
+            <div className="space-y-1.5">
+              <Skeleton className="h-5 w-40 rounded" />
+              <div className="flex items-center gap-1.5">
+                <div className="bg-muted-foreground/30 h-1.5 w-1.5 animate-pulse rounded-full" />
+                <span className="text-muted-foreground animate-pulse text-[10px] font-medium">
+                  {message}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-8 w-16 rounded-lg" />
+            <Skeleton className="h-8 w-20 rounded-lg" />
+          </div>
+        </div>
+      </header>
+
+      {/* Skeleton Split Panels */}
+      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 items-stretch gap-6 overflow-hidden px-6 py-6">
+        {/* Editor Main Section */}
+        <div className="scrollbar-thumb-muted-foreground/20 hover:scrollbar-thumb-muted-foreground/40 flex min-h-0 min-w-0 flex-1 scrollbar-thin scrollbar-track-transparent flex-col gap-4 overflow-y-auto pr-1.5 transition-colors">
+          {/* Metadata outline */}
+          <div className="border-border bg-card space-y-3 rounded-2xl border p-6 shadow-xs">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-3 w-20 rounded" />
+              <Skeleton className="h-3 w-24 rounded" />
+            </div>
+            <Skeleton className="h-9 w-full max-w-md rounded-lg" />
+          </div>
+
+          {/* Editor Canvas Area outline */}
+          <div className="space-y-4 px-4 py-6">
+            <Skeleton className="h-8 w-1/3 rounded-lg" />
+            <div className="space-y-2.5 pt-4">
+              <Skeleton className="h-4 w-full rounded" />
+              <Skeleton className="h-4 w-[95%] rounded" />
+              <Skeleton className="h-4 w-[92%] rounded" />
+              <Skeleton className="h-4 w-[85%] rounded" />
+            </div>
+            <div className="space-y-2.5 pt-4">
+              <Skeleton className="h-4 w-full rounded" />
+              <Skeleton className="h-4 w-[97%] rounded" />
+              <Skeleton className="h-4 w-[90%] rounded" />
+            </div>
+          </div>
+        </div>
+
+        {/* Right timeline sidebar outline */}
+        <div className="border-border bg-card scrollbar-thumb-muted-foreground/20 hover:scrollbar-thumb-muted-foreground/40 hidden min-h-0 w-80 shrink-0 scrollbar-thin scrollbar-track-transparent flex-col space-y-4 overflow-y-auto rounded-2xl border p-4 pr-1.5 pb-4 shadow-xs transition-colors lg:flex">
+          <Skeleton className="mb-4 h-5 w-32 rounded" />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-1/2 rounded" />
+              <Skeleton className="h-10 w-full rounded-lg" />
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-1/3 rounded" />
+              <Skeleton className="h-10 w-full rounded-lg" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -219,16 +296,7 @@ function EditorWorkspace({
   const router = useRouter();
 
   if (!synced || !doc || !content || !awareness || !provider) {
-    return (
-      <div className="from-background to-muted/30 flex min-h-screen items-center justify-center bg-radial">
-        <div className="space-y-2 text-center">
-          <div className="border-primary mx-auto h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"></div>
-          <p className="text-muted-foreground animate-pulse text-sm">
-            Hydrating collaborative document...
-          </p>
-        </div>
-      </div>
-    );
+    return <DocumentWorkspaceSkeleton message="Hydrating collaborative document..." />;
   }
 
   return (
@@ -301,6 +369,15 @@ function EditorWorkspaceContent({
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [previewingSnapshot, setPreviewingSnapshot] = useState<Snapshot | null>(null);
   const [previewText, setPreviewText] = useState('');
+
+  // Custom document appearance & lock configurations
+  const [fontFamily, setFontFamily] = useState<'sans' | 'serif' | 'mono'>('sans');
+  const [isSmallText, setIsSmallText] = useState(false);
+  const [isFullWidth, setIsFullWidth] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
+  const [menuSearch, setMenuSearch] = useState('');
+  const [suggestEdits, setSuggestEdits] = useState(false);
+
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   // Tab panels
@@ -371,7 +448,7 @@ function EditorWorkspaceContent({
     } catch {
       // Ignore error
     }
-  }, [documentId]);
+  }, [documentId, setDocMetadata]);
 
   const loadCollaborators = React.useCallback(async () => {
     try {
@@ -510,7 +587,7 @@ function EditorWorkspaceContent({
           openOnClick: false,
         }),
         GlobalDragHandle.configure({
-          dragHandleWidth: 24,
+          dragHandleWidth: 48,
           dragHandleSelector: '#editor-gutter-controls',
         }),
         // Custom Collapsible nodes
@@ -570,8 +647,8 @@ function EditorWorkspaceContent({
   const isViewer = currentUserRole === 'VIEWER';
   useEffect(() => {
     if (!editor) return;
-    editor.setEditable(!isViewer);
-  }, [editor, isViewer]);
+    editor.setEditable(!isViewer && !isLocked);
+  }, [editor, isViewer, isLocked]);
 
   // Template loader logic
   useEffect(() => {
@@ -632,35 +709,38 @@ function EditorWorkspaceContent({
   useEffect(() => {
     if (isViewer || !editor || !doc) return;
 
-    autoSaveInterval.current = setInterval(async () => {
-      if (!hasUnsavedChanges.current) return;
+    autoSaveInterval.current = setInterval(
+      async () => {
+        if (!hasUnsavedChanges.current) return;
 
-      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const autoLabel = `Auto-save (${timestamp})`;
-      
-      try {
-        const stateUpdate = Y.encodeStateAsUpdate(doc);
-        let binary = '';
-        for (let i = 0; i < stateUpdate.byteLength; i++) {
-          binary += String.fromCharCode(stateUpdate[i]);
+        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const autoLabel = `Auto-save (${timestamp})`;
+
+        try {
+          const stateUpdate = Y.encodeStateAsUpdate(doc);
+          let binary = '';
+          for (let i = 0; i < stateUpdate.byteLength; i++) {
+            binary += String.fromCharCode(stateUpdate[i]);
+          }
+          const stateBase64 = btoa(binary);
+
+          const res = await fetch(`/api/documents/${documentId}/snapshots`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ label: autoLabel, state: stateBase64 }),
+          });
+
+          if (res.ok) {
+            hasUnsavedChanges.current = false;
+            loadSnapshots();
+            console.log(`[Auto-save] Version checkpoint saved successfully: ${autoLabel}`);
+          }
+        } catch (err) {
+          console.error('[Auto-save] Background snapshot creation failed:', err);
         }
-        const stateBase64 = btoa(binary);
-
-        const res = await fetch(`/api/documents/${documentId}/snapshots`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ label: autoLabel, state: stateBase64 }),
-        });
-
-        if (res.ok) {
-          hasUnsavedChanges.current = false;
-          loadSnapshots();
-          console.log(`[Auto-save] Version checkpoint saved successfully: ${autoLabel}`);
-        }
-      } catch (err) {
-        console.error('[Auto-save] Background snapshot creation failed:', err);
-      }
-    }, 5 * 60 * 1000); // Check every 5 minutes
+      },
+      5 * 60 * 1000,
+    ); // Check every 5 minutes
 
     return () => {
       if (autoSaveInterval.current) {
@@ -1306,80 +1386,514 @@ function EditorWorkspaceContent({
   const toggleOrderedList = () => editor?.chain().focus().toggleOrderedList().run();
   const toggleTaskList = () => editor?.chain().focus().toggleTaskList().run();
   const clearFormatting = () => editor?.chain().focus().clearNodes().unsetAllMarks().run();
-  const undo = () => editor?.chain().focus().undo().run();
-  const redo = () => editor?.chain().focus().redo().run();
+  const handleCopyLink = () => {
+    const shareUrl = `${window.location.origin}/documents/${documentId}`;
+    navigator.clipboard.writeText(shareUrl);
+    toast.success('Share link copied to clipboard');
+  };
+
+  const handleCopyContents = () => {
+    if (!editor) return;
+    const text = editor.getText();
+    navigator.clipboard.writeText(text);
+    toast.success('Page contents copied to clipboard');
+  };
+
+  const handleDuplicateDocument = async () => {
+    try {
+      const res = await fetch(`/api/documents/${documentId}/duplicate`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        const newDoc = await res.json();
+        toast.success('Document duplicated successfully');
+        router.push(`/documents/${newDoc.id}`);
+      } else {
+        toast.error('Failed to duplicate document');
+      }
+    } catch {
+      toast.error('Failed to duplicate document');
+    }
+  };
+
+  const handleMoveToTrash = async () => {
+    try {
+      const res = await fetch(`/api/documents/${documentId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        toast.success('Document moved to trash');
+        router.push('/');
+      } else {
+        toast.error('Failed to move document to trash');
+      }
+    } catch {
+      toast.error('Failed to move document to trash');
+    }
+  };
+
+  const handleTranslate = async (lang: string) => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    const selectedText = editor.state.doc.textBetween(from, to, ' ') || editor.getText();
+
+    if (!selectedText.trim()) {
+      toast.warning('No text found to translate');
+      return;
+    }
+
+    toast.promise(
+      (async () => {
+        const res = await fetch('/api/ai/writing-assist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: selectedText,
+            documentId,
+            instruction: `Translate the text into fluent ${lang}. Retain formatting as plain paragraphs.`,
+          }),
+        });
+
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        editor.chain().focus().insertContent(data.improvedText).run();
+      })(),
+      {
+        loading: `Translating text to ${lang}...`,
+        success: `Translated successfully!`,
+        error: `Could not translate text.`,
+      },
+    );
+  };
+
+  const handleExportHTML = () => {
+    if (!editor) return;
+    const htmlContent = editor.getHTML();
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${docMetadata?.title || 'document'}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Document exported as HTML');
+  };
 
   return (
-    <div className="from-background to-muted/20 flex min-h-screen flex-col bg-radial">
+    <div className="from-background to-muted/20 flex h-screen flex-col overflow-hidden bg-radial">
       {/* Screen Reader connection alerts */}
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {ariaLiveAnnouncement}
       </div>
 
       {/* Main Top Header */}
-      <header className="border-border/40 bg-background/80 sticky top-0 z-10 border-b backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+      <header className="border-border/40 bg-background/80 sticky top-0 z-10 shrink-0 border-b py-2 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="group border-border bg-card hover:bg-muted flex h-9 w-9 items-center justify-center rounded-xl border transition-colors"
+              className="group border-border bg-card hover:bg-muted flex h-8 w-8 items-center justify-center rounded-lg border transition-colors"
               aria-label="Go back to Dashboard"
             >
-              <ArrowLeft className="text-muted-foreground group-hover:text-foreground h-4.5 w-4.5" />
+              <ArrowLeft className="text-muted-foreground group-hover:text-foreground h-4 w-4" />
             </Link>
-            <div>
-              <h1 className="text-lg font-bold tracking-tight">DocSync Editor Workspace</h1>
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <div className="flex items-center gap-1">
-                  {saveStatus === 'saving' && (
-                    <>
-                      <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                      <span>Saving version...</span>
-                    </>
-                  )}
-                  {saveStatus === 'dirty' && (
-                    <>
-                      <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                      <span>Unsaved changes (auto-saving soon)</span>
-                    </>
-                  )}
-                  {saveStatus === 'saved' && (
-                    <>
-                      <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                      <span>All changes saved {lastSavedTime ? `at ${lastSavedTime}` : 'to cloud'}</span>
-                    </>
-                  )}
-                </div>
+
+            {/* Minimalist Document Title & Status indicators */}
+            <div className="flex items-center gap-2">
+              {docMetadata ? (
+                <span className="text-foreground max-w-[140px] truncate text-xs font-semibold sm:max-w-[240px]">
+                  {docMetadata.title}
+                </span>
+              ) : (
+                <Skeleton className="h-4 w-24 animate-pulse rounded" />
+              )}
+              <div className="bg-border/60 h-3 w-px" />
+              <div className="text-muted-foreground flex items-center gap-1.5 text-[10px]">
+                {saveStatus === 'saving' && (
+                  <>
+                    <Loader2 className="text-primary h-2.5 w-2.5 animate-spin" />
+                    <span className="hidden sm:inline">Saving...</span>
+                  </>
+                )}
+                {saveStatus === 'dirty' && (
+                  <>
+                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+                    <span className="hidden sm:inline">Unsaved</span>
+                  </>
+                )}
+                {saveStatus === 'saved' && (
+                  <>
+                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <span className="hidden sm:inline">Saved</span>
+                  </>
+                )}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             {getConnectionPill()}
             <button
               data-testid="share-document-btn"
               onClick={() => setShareOpen(true)}
-              className="border-border bg-background hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:ring-3"
+              className="border-border bg-background hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:ring-3"
             >
-              <Share2 className="h-4 w-4" /> Share
+              <Share2 className="h-3.5 w-3.5" /> Share
             </button>
+
+            {/* Notion-Style More Options Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="group border-border bg-background hover:bg-muted flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border transition-colors"
+                  aria-label="More document options"
+                >
+                  <MoreHorizontal className="text-muted-foreground group-hover:text-foreground h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="border-border/80 bg-popover text-popover-foreground animate-in fade-in slide-in-from-top-1 z-50 w-64 rounded-xl border p-1.5 shadow-lg duration-100"
+              >
+                {/* Action Search Input */}
+                <div className="relative mb-1 px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                  <Search className="text-muted-foreground/60 absolute top-1/2 left-4.5 h-3.5 w-3.5 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search actions..."
+                    value={menuSearch}
+                    onChange={(e) => setMenuSearch(e.target.value)}
+                    className="border-border/60 bg-muted/40 focus:border-primary/40 focus:bg-background text-foreground placeholder:text-muted-foreground/60 w-full rounded-lg border py-1.5 pr-3 pl-8 text-xs transition-colors outline-none"
+                  />
+                </div>
+
+                {/* Fonts Picker section - hidden if search matches other stuff */}
+                {(!menuSearch ||
+                  'style font typography family sans serif mono'.includes(
+                    menuSearch.toLowerCase(),
+                  )) && (
+                  <>
+                    <div className="px-2.5 py-1.5" onClick={(e) => e.stopPropagation()}>
+                      <div className="text-muted-foreground mb-2 text-[10px] font-bold tracking-wider uppercase">
+                        Font style
+                      </div>
+                      <div className="bg-muted/40 border-border/40 grid grid-cols-3 gap-1 rounded-lg border p-0.5">
+                        <button
+                          onClick={() => setFontFamily('sans')}
+                          className={`flex cursor-pointer flex-col items-center justify-center rounded-md border px-1 py-2.5 text-[10px] font-semibold transition-all ${
+                            fontFamily === 'sans'
+                              ? 'bg-background border-border text-foreground shadow-xs'
+                              : 'text-muted-foreground hover:text-foreground border-transparent'
+                          }`}
+                        >
+                          <span className="mb-1 font-sans text-base leading-none font-bold">
+                            Ag
+                          </span>
+                          <span>Default</span>
+                        </button>
+                        <button
+                          onClick={() => setFontFamily('serif')}
+                          className={`flex cursor-pointer flex-col items-center justify-center rounded-md border px-1 py-2.5 text-[10px] font-semibold transition-all ${
+                            fontFamily === 'serif'
+                              ? 'bg-background border-border text-foreground shadow-xs'
+                              : 'text-muted-foreground hover:text-foreground border-transparent'
+                          }`}
+                        >
+                          <span className="mb-1 font-serif text-base leading-none font-bold">
+                            Ag
+                          </span>
+                          <span>Serif</span>
+                        </button>
+                        <button
+                          onClick={() => setFontFamily('mono')}
+                          className={`flex cursor-pointer flex-col items-center justify-center rounded-md border px-1 py-2.5 text-[10px] font-semibold transition-all ${
+                            fontFamily === 'mono'
+                              ? 'bg-background border-border text-foreground shadow-xs'
+                              : 'text-muted-foreground hover:text-foreground border-transparent'
+                          }`}
+                        >
+                          <span className="mb-1 font-mono text-base leading-none font-bold">
+                            Ag
+                          </span>
+                          <span>Mono</span>
+                        </button>
+                      </div>
+                    </div>
+                    <DropdownMenuSeparator className="my-1.5" />
+                  </>
+                )}
+
+                {/* Page margins toggles - hidden if search matches other stuff */}
+                {(!menuSearch ||
+                  'small text wide width lock document edit page'.includes(
+                    menuSearch.toLowerCase(),
+                  )) && (
+                  <>
+                    <div className="px-1 py-0.5" onClick={(e) => e.stopPropagation()}>
+                      {(!menuSearch ||
+                        'small text font size typography'.includes(menuSearch.toLowerCase())) && (
+                        <div className="hover:bg-muted/40 flex items-center justify-between rounded-lg px-2.5 py-1.5 transition-colors">
+                          <div className="flex items-center gap-2">
+                            <Type className="text-muted-foreground h-3.5 w-3.5" />
+                            <span className="text-xs">Small text</span>
+                          </div>
+                          <button
+                            onClick={() => setIsSmallText(!isSmallText)}
+                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent outline-hidden transition-colors duration-200 ease-in-out focus:outline-none ${
+                              isSmallText ? 'bg-primary' : 'bg-muted'
+                            }`}
+                          >
+                            <span
+                              className={`bg-background pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-xs ring-0 transition duration-200 ease-in-out ${
+                                isSmallText ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      )}
+
+                      {(!menuSearch ||
+                        'wide width full size layout margins'.includes(
+                          menuSearch.toLowerCase(),
+                        )) && (
+                        <div className="hover:bg-muted/40 flex items-center justify-between rounded-lg px-2.5 py-1.5 transition-colors">
+                          <div className="flex items-center gap-2">
+                            <Maximize2 className="text-muted-foreground h-3.5 w-3.5" />
+                            <span className="text-xs">Full width</span>
+                          </div>
+                          <button
+                            onClick={() => setIsFullWidth(!isFullWidth)}
+                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent outline-hidden transition-colors duration-200 ease-in-out focus:outline-none ${
+                              isFullWidth ? 'bg-primary' : 'bg-muted'
+                            }`}
+                          >
+                            <span
+                              className={`bg-background pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-xs ring-0 transition duration-200 ease-in-out ${
+                                isFullWidth ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      )}
+
+                      {(!menuSearch ||
+                        'lock protect document freeze static'.includes(
+                          menuSearch.toLowerCase(),
+                        )) && (
+                        <div className="hover:bg-muted/40 flex items-center justify-between rounded-lg px-2.5 py-1.5 transition-colors">
+                          <div className="flex items-center gap-2">
+                            {isLocked ? (
+                              <Lock className="text-muted-foreground h-3.5 w-3.5" />
+                            ) : (
+                              <Unlock className="text-muted-foreground h-3.5 w-3.5" />
+                            )}
+                            <span className="text-xs">Lock page</span>
+                          </div>
+                          <button
+                            onClick={() => setIsLocked(!isLocked)}
+                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent outline-hidden transition-colors duration-200 ease-in-out focus:outline-none ${
+                              isLocked ? 'bg-primary' : 'bg-muted'
+                            }`}
+                          >
+                            <span
+                              className={`bg-background pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-xs ring-0 transition duration-200 ease-in-out ${
+                                isLocked ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <DropdownMenuSeparator className="my-1.5" />
+                  </>
+                )}
+
+                {/* Actions list filtered dynamically */}
+                <div className="space-y-0.5 px-1 py-0.5">
+                  {/* AI Writing assistance tools */}
+                  {(!menuSearch ||
+                    'ai write assistant translation suggest edits summarize'.includes(
+                      menuSearch.toLowerCase(),
+                    )) && (
+                    <>
+                      {isAiConfigured && (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            if (!editor) return;
+                            const { from, to } = editor.state.selection;
+                            const selectedText = editor.state.doc.textBetween(from, to, ' ');
+                            if (!selectedText.trim()) {
+                              toast.warning('Please highlight a section of text to analyze first.');
+                              return;
+                            }
+                            setAiAssistInstruction(
+                              'Summarize this paragraph and suggest core bullet improvements.',
+                            );
+                            handleAiWritingAssist();
+                          }}
+                          className="hover:bg-primary/10 text-primary flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs"
+                        >
+                          <Sparkles className="h-3.5 w-3.5" />
+                          <span>Use with AI</span>
+                        </DropdownMenuItem>
+                      )}
+
+                      <div
+                        className="hover:bg-muted/40 flex items-center justify-between rounded-lg px-2.5 py-1.5 transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center gap-2">
+                          <MessageSquare className="text-muted-foreground h-3.5 w-3.5" />
+                          <span className="text-xs">Suggest edits</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSuggestEdits(!suggestEdits);
+                            toast.success(
+                              suggestEdits ? 'Suggestions disabled' : 'Suggestions enabled',
+                            );
+                          }}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent outline-hidden transition-colors duration-200 ease-in-out focus:outline-none ${
+                            suggestEdits ? 'bg-primary' : 'bg-muted'
+                          }`}
+                        >
+                          <span
+                            className={`bg-background pointer-events-none inline-block h-4 w-4 transform rounded-full shadow-xs ring-0 transition duration-200 ease-in-out ${
+                              suggestEdits ? 'translate-x-4' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs">
+                          <Globe className="text-muted-foreground h-3.5 w-3.5" />
+                          <span>Translate</span>
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuPortal>
+                          <DropdownMenuSubContent className="border-border bg-popover z-50 w-36 rounded-xl border shadow-md">
+                            {['Spanish', 'French', 'German', 'Chinese', 'Hindi'].map((lang) => (
+                              <DropdownMenuItem
+                                key={lang}
+                                onClick={() => handleTranslate(lang)}
+                                className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs"
+                              >
+                                {lang}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuPortal>
+                      </DropdownMenuSub>
+
+                      <DropdownMenuSeparator className="my-1.5" />
+                    </>
+                  )}
+
+                  {/* Standard options */}
+                  {(!menuSearch || 'copy link url share'.includes(menuSearch.toLowerCase())) && (
+                    <DropdownMenuItem
+                      onClick={handleCopyLink}
+                      className="flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <LinkIcon className="text-muted-foreground h-3.5 w-3.5" />
+                        <span>Copy link</span>
+                      </div>
+                      <kbd className="text-muted-foreground font-mono text-[10px]">Ctrl+Alt+L</kbd>
+                    </DropdownMenuItem>
+                  )}
+
+                  {(!menuSearch ||
+                    'copy page text text contents content doc'.includes(
+                      menuSearch.toLowerCase(),
+                    )) && (
+                    <DropdownMenuItem
+                      onClick={handleCopyContents}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs"
+                    >
+                      <Copy className="text-muted-foreground h-3.5 w-3.5" />
+                      <span>Copy page contents</span>
+                    </DropdownMenuItem>
+                  )}
+
+                  {(!menuSearch ||
+                    'duplicate clone document copy'.includes(menuSearch.toLowerCase())) && (
+                    <DropdownMenuItem
+                      onClick={handleDuplicateDocument}
+                      className="flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Files className="text-muted-foreground h-3.5 w-3.5" />
+                        <span>Duplicate</span>
+                      </div>
+                      <kbd className="text-muted-foreground font-mono text-[10px]">Ctrl+D</kbd>
+                    </DropdownMenuItem>
+                  )}
+
+                  {(!menuSearch || 'undo backward return'.includes(menuSearch.toLowerCase())) && (
+                    <DropdownMenuItem
+                      onClick={() => editor?.chain().focus().undo().run()}
+                      disabled={!editor?.can().undo()}
+                      className="flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Undo className="text-muted-foreground h-3.5 w-3.5" />
+                        <span>Undo</span>
+                      </div>
+                      <kbd className="text-muted-foreground font-mono text-[10px]">Ctrl+Z</kbd>
+                    </DropdownMenuItem>
+                  )}
+
+                  {(!menuSearch ||
+                    'export download html save'.includes(menuSearch.toLowerCase())) && (
+                    <DropdownMenuItem
+                      onClick={handleExportHTML}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs"
+                    >
+                      <Download className="text-muted-foreground h-3.5 w-3.5" />
+                      <span>Export as HTML</span>
+                    </DropdownMenuItem>
+                  )}
+
+                  {(!menuSearch ||
+                    'delete trash remove move destroy'.includes(menuSearch.toLowerCase())) && (
+                    <>
+                      <DropdownMenuSeparator className="my-1.5" />
+                      <DropdownMenuItem
+                        onClick={handleMoveToTrash}
+                        className="text-destructive focus:bg-destructive/10 focus:text-destructive flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Trash2 className="text-destructive h-3.5 w-3.5" />
+                          <span>Move to Trash</span>
+                        </div>
+                        <kbd className="text-destructive/60 font-mono text-[10px]">
+                          Ctrl+Shift+T
+                        </kbd>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Button
               variant="outline"
               size="icon"
-              className="lg:hidden"
+              className="h-8 w-8 lg:hidden"
               onClick={() => setIsSidebarOpen(true)}
               aria-label="Open document timeline panel"
             >
-              <Menu className="h-4.5 w-4.5" />
+              <Menu className="h-4 w-4" />
             </Button>
           </div>
         </div>
       </header>
 
       {/* Split Panels */}
-      <div className="mx-auto flex w-full max-w-7xl flex-1 items-stretch gap-6 px-6 py-8">
+      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 items-stretch gap-6 overflow-hidden px-6 py-6">
         {/* Editor Main Section */}
-        <div className="min-w-0 flex-1 space-y-4">
+        <div className="scrollbar-thumb-muted-foreground/20 hover:scrollbar-thumb-muted-foreground/40 flex min-h-0 min-w-0 flex-1 scrollbar-thin scrollbar-track-transparent flex-col gap-4 overflow-y-auto pr-1.5 transition-colors">
           {/* Document metadata card */}
           <div className="border-border bg-card space-y-3 rounded-2xl border p-6 shadow-xs">
             <div className="flex items-center justify-between">
@@ -1397,38 +1911,44 @@ function EditorWorkspaceContent({
             </div>
 
             {/* Inline premium rename field */}
-            <input
-              type="text"
-              value={docMetadata?.title || ''}
-              onChange={(e) =>
-                setDocMetadata((prev) => (prev ? { ...prev, title: e.target.value } : null))
-              }
-              onBlur={async () => {
-                if (!docMetadata?.title.trim()) return;
-                try {
-                  const res = await fetch(`/api/documents/${documentId}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title: docMetadata.title.trim() }),
-                  });
-                  if (res.ok) {
-                    toast.success('Title saved');
-                  } else {
+            {docMetadata ? (
+              <input
+                type="text"
+                value={docMetadata.title}
+                onChange={(e) =>
+                  setDocMetadata((prev) => (prev ? { ...prev, title: e.target.value } : null))
+                }
+                onBlur={async () => {
+                  if (!docMetadata.title.trim()) return;
+                  try {
+                    const res = await fetch(`/api/documents/${documentId}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ title: docMetadata.title.trim() }),
+                    });
+                    if (res.ok) {
+                      toast.success('Title saved');
+                    } else {
+                      toast.error('Failed to update title');
+                    }
+                  } catch {
                     toast.error('Failed to update title');
                   }
-                } catch {
-                  toast.error('Failed to update title');
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  (e.target as HTMLInputElement).blur();
-                }
-              }}
-              disabled={isViewer}
-              className="hover:border-border/30 focus:border-primary/50 w-full rounded border-b border-transparent bg-transparent py-1 text-2xl font-extrabold tracking-tight focus:outline-none"
-              placeholder="Untitled Document"
-            />
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                disabled={isViewer}
+                className="hover:border-border/30 focus:border-primary/50 w-full rounded border-b border-transparent bg-transparent py-1 text-2xl font-extrabold tracking-tight focus:outline-none"
+                placeholder="Untitled Document"
+              />
+            ) : (
+              <div className="py-1">
+                <Skeleton className="h-8 w-64 animate-pulse rounded-lg" />
+              </div>
+            )}
           </div>
 
           {/* Unconfigured API Key friendly alert banner */}
@@ -1454,7 +1974,15 @@ function EditorWorkspaceContent({
           )}
 
           {/* Collaborative interactive container */}
-          <div className="border-border bg-card relative min-h-[500px] rounded-2xl border p-8 shadow-xl md:p-12">
+          <div
+            className={`border-border bg-card relative min-h-[500px] rounded-2xl border p-8 shadow-xl transition-all md:p-12 ${
+              fontFamily === 'serif'
+                ? 'editor-font-serif'
+                : fontFamily === 'mono'
+                  ? 'editor-font-mono'
+                  : 'editor-font-sans'
+            } ${isSmallText ? 'editor-small-text' : ''} ${isFullWidth ? 'editor-full-width' : ''}`}
+          >
             {/* Embedded Drag Handle and Plus gutter controls */}
             {!isViewer && editor && (
               <div
@@ -1476,7 +2004,27 @@ function EditorWorkspaceContent({
 
             {/* Notion Bubble Menu */}
             {editor && !isViewer && (
-              <BubbleMenu editor={editor} {...({ tippyOptions: { duration: 150 } } as any)}>
+              <BubbleMenu
+                editor={editor}
+                {...({
+                  tippyOptions: {
+                    duration: 150,
+                    onClickOutside(instance: any, event: any) {
+                      const target = event.target as HTMLElement;
+                      if (
+                        target.closest('[data-radix-popper-content-wrapper]') ||
+                        target.closest('[role="menu"]') ||
+                        target.closest('[role="dialog"]') ||
+                        target.closest('.fixed') ||
+                        target.closest('#editor-gutter-controls')
+                      ) {
+                        return;
+                      }
+                      instance.hide();
+                    },
+                  },
+                } as any)}
+              >
                 <div className="border-border bg-background/95 animate-in zoom-in-95 flex max-w-[90vw] flex-wrap items-center gap-1 rounded-xl border p-1.5 shadow-xl backdrop-blur-md duration-100">
                   {/* AI Writing Assist Button */}
                   {isAiConfigured && (
@@ -1502,7 +2050,7 @@ function EditorWorkspaceContent({
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={undo}
+                    onClick={() => editor?.chain().focus().undo().run()}
                     disabled={!editor?.can().undo()}
                     className="h-7 w-7 shrink-0"
                     title="Undo (Ctrl+Z)"
@@ -1513,7 +2061,7 @@ function EditorWorkspaceContent({
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={redo}
+                    onClick={() => editor?.chain().focus().redo().run()}
                     disabled={!editor?.can().redo()}
                     className="h-7 w-7 shrink-0"
                     title="Redo (Ctrl+Y)"
@@ -1552,7 +2100,7 @@ function EditorWorkspaceContent({
                         <ChevronDown className="h-3 w-3 opacity-60" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent portaled={false} align="start" className="max-h-64 w-44 overflow-y-auto">
+                    <DropdownMenuContent align="start" className="max-h-64 w-44 overflow-y-auto">
                       <DropdownMenuItem onClick={() => editor.chain().focus().setParagraph().run()}>
                         <FileText className="text-muted-foreground mr-2 h-3.5 w-3.5" /> Text
                       </DropdownMenuItem>
@@ -1737,7 +2285,7 @@ function EditorWorkspaceContent({
                         })()}
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent portaled={false} align="center" className="w-32">
+                    <DropdownMenuContent align="center" className="w-32">
                       <DropdownMenuItem
                         onClick={() => editor.chain().focus().setTextAlign('left').run()}
                       >
@@ -1775,7 +2323,7 @@ function EditorWorkspaceContent({
                         </span>
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent portaled={false} align="center" className="w-36">
+                    <DropdownMenuContent align="center" className="w-36">
                       <DropdownMenuItem onClick={() => editor.chain().focus().unsetColor().run()}>
                         <div className="border-border bg-foreground h-3 w-3 shrink-0 rounded-full border" />
                         Default
@@ -1831,7 +2379,7 @@ function EditorWorkspaceContent({
                         <Sparkles className="h-3.5 w-3.5 text-amber-500" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent portaled={false} align="center" className="w-40">
+                    <DropdownMenuContent align="center" className="w-40">
                       <DropdownMenuItem
                         onClick={() => editor.chain().focus().unsetHighlight().run()}
                       >
@@ -1976,8 +2524,8 @@ function EditorWorkspaceContent({
                       {aiAssistLoading ? 'Thinking...' : 'Generate Suggestion'}
                     </Button>
                     {aiAssistError && (
-                      <div className="text-red-500 text-[10px] bg-red-500/10 border border-red-500/20 p-2 rounded-lg flex items-start gap-1.5">
-                        <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <div className="flex items-start gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 p-2 text-[10px] text-red-500">
+                        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                         <span className="leading-tight">{aiAssistError}</span>
                       </div>
                     )}
@@ -2095,7 +2643,7 @@ function EditorWorkspaceContent({
         </div>
 
         {/* Sidebar panels */}
-        <aside className="hidden w-80 shrink-0 space-y-6 lg:block">
+        <aside className="scrollbar-thumb-muted-foreground/20 hover:scrollbar-thumb-muted-foreground/40 hidden min-h-0 w-80 shrink-0 scrollbar-thin scrollbar-track-transparent flex-col space-y-6 overflow-y-auto pr-1.5 pb-6 transition-colors lg:flex">
           <SidebarContent
             snapshots={snapshots}
             previewingSnapshot={previewingSnapshot}
@@ -2186,14 +2734,21 @@ function EditorWorkspaceContent({
 
       {/* Bigger scrollable document-prose Snapshot Preview Dialog */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-        <DialogContent className="max-w-4xl w-[90vw] h-[80vh] flex flex-col p-6 rounded-2xl border border-border bg-card">
-          <DialogHeader className="border-b border-border/50 pb-4">
+        <DialogContent className="border-border bg-card flex h-[80vh] w-[90vw] max-w-4xl flex-col rounded-2xl border p-6">
+          <DialogHeader className="border-border/50 border-b pb-4">
             <div className="flex items-center justify-between">
               <div>
-                <DialogTitle className="text-xl font-bold">Version History Snapshot Preview</DialogTitle>
+                <DialogTitle className="text-xl font-bold">
+                  Version History Snapshot Preview
+                </DialogTitle>
                 {previewingSnapshot && (
-                  <DialogDescription className="text-xs text-muted-foreground mt-1">
-                    Label: <span className="font-semibold text-foreground">{previewingSnapshot.label}</span> • Saved on {new Date(previewingSnapshot.createdAt).toLocaleString()} by {previewingSnapshot.creator.name || previewingSnapshot.creator.email}
+                  <DialogDescription className="text-muted-foreground mt-1 text-xs">
+                    Label:{' '}
+                    <span className="text-foreground font-semibold">
+                      {previewingSnapshot.label}
+                    </span>{' '}
+                    • Saved on {new Date(previewingSnapshot.createdAt).toLocaleString()} by{' '}
+                    {previewingSnapshot.creator.name || previewingSnapshot.creator.email}
                   </DialogDescription>
                 )}
               </div>
@@ -2204,20 +2759,20 @@ function EditorWorkspaceContent({
                     setIsPreviewOpen(false);
                   }}
                   size="sm"
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5"
+                  className="flex items-center gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
                 >
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin-once" /> Restore This Version
+                  <RefreshCw className="animate-spin-once h-3.5 w-3.5" /> Restore This Version
                 </Button>
               )}
             </div>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto py-6 px-4 bg-muted/10 rounded-xl border border-border/30 mt-4">
+          <div className="bg-muted/10 border-border/30 mt-4 flex-1 overflow-y-auto rounded-xl border px-4 py-6">
             <div className="mx-auto max-w-3xl">
               {/* Styled like document prose */}
-              <div 
+              <div
                 className="prose dark:prose-invert max-w-none text-base leading-relaxed break-words"
-                dangerouslySetInnerHTML={{ __html: previewText }} 
+                dangerouslySetInnerHTML={{ __html: previewText }}
               />
             </div>
           </div>
@@ -2340,8 +2895,6 @@ function SidebarContent({
             )}
           </div>
         )}
-
-
 
         {/* Snapshot listing timeline */}
         <div

@@ -185,7 +185,7 @@
 }
 
 /* List spacing and styles */
-.ProseMirror ul:not([data-type="taskList"]) {
+.ProseMirror ul:not([data-type='taskList']) {
   list-style-type: disc !important;
   padding-left: 1.5rem;
 }
@@ -327,14 +327,24 @@ ul[data-type='taskList'] input[type='checkbox'] {
 #editor-gutter-controls {
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s ease, transform 0.1s ease;
-  transform: translate3d(-48px, 2px, 0); /* Offset horizontally to render in left gutter next to text */
+  transition:
+    opacity 0.15s ease,
+    transform 0.1s ease;
+  transform: translate3d(
+    0,
+    2px,
+    0
+  ); /* Positioned by Tiptap relative to block; only offset vertical balance */
 }
 
+/* Enable pointer events and guarantee visibility when the editor reveals the gutter controls */
+#editor-gutter-controls[style*='opacity: 1'],
+#editor-gutter-controls[style*='opacity:1'],
+#editor-gutter-controls[style*='opacity: 0.9'],
 #editor-gutter-controls.global-drag-handle-active,
 #editor-gutter-controls:hover {
-  opacity: 1;
-  pointer-events: auto;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 .global-drag-handle {
@@ -345,7 +355,9 @@ ul[data-type='taskList'] input[type='checkbox'] {
   height: 1.25rem;
   border-radius: 4px;
   color: var(--muted-foreground);
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
   cursor: grab;
 }
 
@@ -411,4 +423,53 @@ ul[data-type='taskList'] input[type='checkbox'] {
 
 .ProseMirror [data-type='callout-block'] p {
   margin: 0 !important;
+}
+
+/* Custom Editor Font & Width Settings */
+.editor-font-serif .ProseMirror {
+  font-family: Georgia, Cambria, 'Times New Roman', Times, serif !important;
+}
+.editor-font-mono .ProseMirror {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace !important;
+}
+.editor-font-sans .ProseMirror {
+  font-family:
+    var(--font-sans),
+    system-ui,
+    -apple-system,
+    sans-serif !important;
+}
+
+.editor-small-text .ProseMirror {
+  font-size: 0.875rem !important;
+}
+
+.editor-full-width .ProseMirror {
+  max-width: 100% !important;
+}
+
+/* Premium Glassmorphic Scrollbar styling */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--muted-foreground) 20%, transparent);
+  border-radius: 9999px;
+  border: 1px solid transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklch, var(--muted-foreground) 40%, transparent);
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 20%, transparent) transparent;
 }

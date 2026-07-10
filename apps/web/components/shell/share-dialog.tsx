@@ -170,44 +170,58 @@ export function ShareDialog({
         </DialogHeader>
 
         {isOwner && (
-          <form onSubmit={handleInvite} className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Input
-              type="email"
-              placeholder="Enter email address"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              disabled={isInviting}
-              required
-              className="flex-1 min-w-0"
-            />
-            <div className="flex items-center gap-2 shrink-0">
+          <form onSubmit={handleInvite} className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="invite-email"
+                className="text-muted-foreground text-[10px] font-bold tracking-wide uppercase"
+              >
+                Email Address
+              </label>
+              <Input
+                id="invite-email"
+                type="email"
+                placeholder="Enter email address"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                disabled={isInviting}
+                required
+                className="h-9 w-full"
+              />
+            </div>
+            <div className="flex items-center gap-2">
               <select
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value as 'OWNER' | 'EDITOR' | 'VIEWER')}
                 disabled={isInviting}
-                className="border-input bg-background h-9 rounded-lg border px-2 text-sm outline-none flex-1 sm:flex-initial"
+                className="border-input bg-background h-9 flex-1 rounded-lg border px-3 text-xs font-medium outline-none"
               >
                 <option value="EDITOR">Editor</option>
                 <option value="VIEWER">Viewer</option>
                 <option value="OWNER">Owner</option>
               </select>
-              <Button type="submit" disabled={isInviting} className="gap-1.5 flex-1 sm:flex-initial">
-                {isInviting && <Loader2 className="h-3 w-3 animate-spin" />}
+              <Button
+                type="submit"
+                disabled={isInviting}
+                size="sm"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 flex-1 gap-1.5"
+              >
+                {isInviting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 Invite
               </Button>
             </div>
           </form>
         )}
 
-        <div className="space-y-3 pt-2">
-          <span className="text-muted-foreground block text-xs font-bold tracking-wider uppercase">
+        <div className="space-y-2 pt-2">
+          <span className="text-muted-foreground block text-[10px] font-bold tracking-wider uppercase">
             Collaborators
           </span>
 
-          <div className="max-h-[220px] space-y-2.5 overflow-y-auto pr-1">
+          <div className="max-h-[180px] scrollbar-thin space-y-2 overflow-y-auto pr-1">
             {loadingList ? (
               <div className="flex justify-center py-6">
-                <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+                <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />
               </div>
             ) : collaborators.length === 0 ? (
               <div className="text-muted-foreground py-4 text-center text-xs italic">
@@ -218,15 +232,18 @@ export function ShareDialog({
                 const isColMe = col.userId === currentUserId;
                 const isRowLoading = !!loadingRows[col.userId];
                 return (
-                  <div key={col.userId} className="flex items-center justify-between gap-3 py-1 text-xs">
-                    <div className="flex flex-1 min-w-0 items-center gap-2">
+                  <div
+                    key={col.userId}
+                    className="flex items-center justify-between gap-3 py-1 text-xs"
+                  >
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
                       <Avatar className="h-8 w-8 shrink-0">
-                        <AvatarFallback>
-                          {(col.user.name || col.user.email || 'U').slice(0, 2)}
+                        <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">
+                          {(col.user.name || col.user.email || 'U').slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate font-bold">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-foreground truncate font-semibold">
                           {col.user.name || col.user.email} {isColMe && '(You)'}
                         </div>
                         <div className="text-muted-foreground truncate text-[10px]">
@@ -250,14 +267,14 @@ export function ShareDialog({
                             )
                           }
                           disabled={isRowLoading}
-                          className="border-input bg-background h-7 rounded border px-1.5 text-[11px] font-semibold outline-none"
+                          className="border-input bg-background h-7 rounded border px-1.5 text-[10px] font-semibold outline-none"
                         >
                           <option value="EDITOR">Editor</option>
                           <option value="VIEWER">Viewer</option>
                           <option value="OWNER">Owner</option>
                         </select>
                       ) : (
-                        <span className="bg-muted text-muted-foreground rounded px-2 py-0.5 text-[10px] font-bold uppercase">
+                        <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-[9px] font-bold tracking-wider uppercase">
                           {col.role}
                         </span>
                       )}
@@ -268,7 +285,7 @@ export function ShareDialog({
                           size="icon-xs"
                           onClick={() => handleRemoveCollaborator(col.userId)}
                           disabled={isRowLoading}
-                          className="text-destructive hover:bg-destructive/10"
+                          className="text-destructive hover:bg-destructive/10 h-7 w-7"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -281,27 +298,32 @@ export function ShareDialog({
           </div>
         </div>
 
-        <div className="border-border/50 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center justify-between">
-          <div className="bg-muted text-muted-foreground flex-1 min-w-0 truncate rounded-lg px-3 py-2 font-mono text-[11px] select-all">
-            {documentId
-              ? `${window.location.origin}/documents/${documentId}`
-              : 'Generating link...'}
+        <div className="border-border/50 space-y-2 border-t pt-4">
+          <span className="text-muted-foreground block text-[10px] font-bold tracking-wider uppercase">
+            Share Link
+          </span>
+          <div className="flex items-center gap-2">
+            <div className="bg-muted text-muted-foreground border-border/30 min-w-0 flex-1 truncate rounded-lg border px-3 py-2 font-mono text-[11px] select-all">
+              {documentId
+                ? `${window.location.origin}/documents/${documentId}`
+                : 'Generating link...'}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleCopyLink}
+              disabled={!documentId}
+              className="h-9 shrink-0 gap-1.5"
+            >
+              {isCopied ? (
+                <Check className="h-3.5 w-3.5 text-emerald-600" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+              {isCopied ? 'Copied' : 'Copy'}
+            </Button>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleCopyLink}
-            disabled={!documentId}
-            className="sm:shrink-0 gap-1.5 w-full sm:w-auto"
-          >
-            {isCopied ? (
-              <Check className="h-3.5 w-3.5 text-emerald-600" />
-            ) : (
-              <Copy className="h-3.5 w-3.5" />
-            )}
-            {isCopied ? 'Copied' : 'Copy Link'}
-          </Button>
         </div>
       </DialogContent>
     </Dialog>

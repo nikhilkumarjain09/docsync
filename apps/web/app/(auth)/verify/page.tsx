@@ -6,6 +6,7 @@ import { verifyTokenAction, resendVerification } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, AlertCircle, RefreshCw, Mail, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function VerifyContent() {
   const searchParams = useSearchParams();
@@ -80,9 +81,7 @@ function VerifyContent() {
 
       <div className="px-8 pt-8 pb-4 text-center">
         {status === 'loading' && (
-          <div className="bg-muted mx-auto flex h-12 w-12 animate-pulse items-center justify-center rounded-full">
-            <RefreshCw className="text-muted-foreground h-6 w-6 animate-spin" />
-          </div>
+          <div className="bg-muted/60 mx-auto flex h-12 w-12 animate-pulse items-center justify-center rounded-full" />
         )}
         {status === 'success' && (
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10">
@@ -95,16 +94,29 @@ function VerifyContent() {
           </div>
         )}
 
-        <h2 className="text-foreground mt-4 text-2xl font-bold tracking-tight">
-          {status === 'loading' && 'Authenticating Session'}
+        <h2 className="text-foreground mt-4 flex justify-center text-2xl font-bold tracking-tight">
+          {status === 'loading' && <Skeleton className="h-7 w-48 rounded" />}
           {status === 'success' && 'Security Clearance Confirmed'}
           {status === 'error' && 'Access Authorization Failed'}
         </h2>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {status === 'loading' && 'Validating secure session token...'}
-          {status === 'success' && 'Your credentials have been verified. Accessing secure workspace...'}
-          {status === 'error' && 'Unable to authorize session. The security token is invalid or has expired.'}
-        </p>
+        <div className="text-muted-foreground mt-2 flex flex-col items-center gap-1.5">
+          {status === 'loading' && (
+            <>
+              <Skeleton className="h-4 w-64 animate-pulse rounded" />
+              <Skeleton className="h-4 w-40 animate-pulse rounded" />
+            </>
+          )}
+          {status === 'success' && (
+            <p className="text-sm">
+              Your credentials have been verified. Accessing secure workspace...
+            </p>
+          )}
+          {status === 'error' && (
+            <p className="text-sm">
+              Unable to authorize session. The security token is invalid or has expired.
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="space-y-6 px-8 py-4">
@@ -192,8 +204,12 @@ export default function VerifyPage() {
           <div className="border-border bg-card/80 w-full max-w-md overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-md">
             <div className="h-1.5 w-full bg-gradient-to-r from-violet-950 via-purple-900 to-indigo-950" />
             <div className="flex flex-col items-center justify-center space-y-4 p-12">
-              <RefreshCw className="text-muted-foreground h-8 w-8 animate-spin" />
-              <span className="text-muted-foreground text-sm">Loading verification content...</span>
+              <div className="bg-muted/60 h-12 w-12 animate-pulse rounded-full" />
+              <Skeleton className="h-6 w-48 rounded" />
+              <div className="flex w-full flex-col items-center gap-1.5">
+                <Skeleton className="h-4 w-64 animate-pulse rounded" />
+                <Skeleton className="h-4 w-40 animate-pulse rounded" />
+              </div>
             </div>
           </div>
         }
