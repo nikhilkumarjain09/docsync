@@ -2,41 +2,8 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamText, generateText } from 'ai';
 
-const groqApiKey = process.env.GROQ_API_KEY;
-const nvidiaApiKey = process.env.NVIDIA_API_KEY;
-const geminiApiKey = process.env.GEMINI_API_KEY;
-
-export const hasAiConfigured = !!(groqApiKey || nvidiaApiKey || geminiApiKey);
-
-// Diagnostics log on server spin-up
-console.log('[AI Provider] API Keys configuration state:', {
-  groq: !!groqApiKey,
-  nvidia: !!nvidiaApiKey,
-  gemini: !!geminiApiKey,
-});
-
-// Initialize Groq provider
-const groq = groqApiKey
-  ? createOpenAI({
-      baseURL: 'https://api.groq.com/openai/v1',
-      apiKey: groqApiKey,
-    })
-  : null;
-
-// Initialize NVIDIA provider (OpenAI-compatible catalog endpoint)
-const nvidia = nvidiaApiKey
-  ? createOpenAI({
-      baseURL: 'https://integrate.api.nvidia.com/v1',
-      apiKey: nvidiaApiKey,
-    })
-  : null;
-
-// Initialize Google Gemini provider
-const google = geminiApiKey
-  ? createGoogleGenerativeAI({
-      apiKey: geminiApiKey,
-    })
-  : null;
+// Keep this export for backward compatibility with route gates
+export const hasAiConfigured = true;
 
 /**
  * Streams text output using first-available provider with fallback (Groq -> NVIDIA -> Gemini).
@@ -48,18 +15,26 @@ export async function streamTextWithFallback({
   system?: string;
   prompt: string;
 }) {
-  if (!hasAiConfigured) {
+  const groqKey = process.env.GROQ_API_KEY;
+  const nvidiaKey = process.env.NVIDIA_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
+
+  if (!groqKey && !nvidiaKey && !geminiKey) {
     throw new Error(
       'AI features are not configured. Set GROQ_API_KEY, NVIDIA_API_KEY, or GEMINI_API_KEY.',
     );
   }
 
   // 1. Try Groq
-  if (groq) {
+  if (groqKey) {
     try {
       console.log('[AI] Attempting text stream with primary provider: Groq (Llama)');
+      const groq = createOpenAI({
+        baseURL: 'https://api.groq.com/openai/v1',
+        apiKey: groqKey,
+      });
       return await streamText({
-        model: groq('llama-3.3-70b-specdec'),
+        model: groq('llama-3.3-70b-versatile'),
         system,
         prompt,
       });
@@ -70,9 +45,13 @@ export async function streamTextWithFallback({
   }
 
   // 2. Try NVIDIA
-  if (nvidia) {
+  if (nvidiaKey) {
     try {
       console.log('[AI] Attempting text stream with secondary provider: NVIDIA (Llama)');
+      const nvidia = createOpenAI({
+        baseURL: 'https://integrate.api.nvidia.com/v1',
+        apiKey: nvidiaKey,
+      });
       return await streamText({
         model: nvidia('meta/llama-3.3-70b-instruct'),
         system,
@@ -85,8 +64,11 @@ export async function streamTextWithFallback({
   }
 
   // 3. Try Gemini
-  if (google) {
+  if (geminiKey) {
     console.log('[AI] Attempting text stream with tertiary provider: Gemini (Flash)');
+    const google = createGoogleGenerativeAI({
+      apiKey: geminiKey,
+    });
     return await streamText({
       model: google('gemini-2.0-flash'),
       system,
@@ -107,18 +89,26 @@ export async function generateTextWithFallback({
   system?: string;
   prompt: string;
 }) {
-  if (!hasAiConfigured) {
+  const groqKey = process.env.GROQ_API_KEY;
+  const nvidiaKey = process.env.NVIDIA_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
+
+  if (!groqKey && !nvidiaKey && !geminiKey) {
     throw new Error(
       'AI features are not configured. Set GROQ_API_KEY, NVIDIA_API_KEY, or GEMINI_API_KEY.',
     );
   }
 
   // 1. Try Groq
-  if (groq) {
+  if (groqKey) {
     try {
       console.log('[AI] Attempting generation with primary provider: Groq (Llama)');
+      const groq = createOpenAI({
+        baseURL: 'https://api.groq.com/openai/v1',
+        apiKey: groqKey,
+      });
       return await generateText({
-        model: groq('llama-3.3-70b-specdec'),
+        model: groq('llama-3.3-70b-versatile'),
         system,
         prompt,
       });
@@ -129,9 +119,13 @@ export async function generateTextWithFallback({
   }
 
   // 2. Try NVIDIA
-  if (nvidia) {
+  if (nvidiaKey) {
     try {
       console.log('[AI] Attempting generation with secondary provider: NVIDIA (Llama)');
+      const nvidia = createOpenAI({
+        baseURL: 'https://integrate.api.nvidia.com/v1',
+        apiKey: nvidiaKey,
+      });
       return await generateText({
         model: nvidia('meta/llama-3.3-70b-instruct'),
         system,
@@ -144,8 +138,11 @@ export async function generateTextWithFallback({
   }
 
   // 3. Try Gemini
-  if (google) {
+  if (geminiKey) {
     console.log('[AI] Attempting generation with tertiary provider: Gemini (Flash)');
+    const google = createGoogleGenerativeAI({
+      apiKey: geminiKey,
+    });
     return await generateText({
       model: google('gemini-2.0-flash'),
       system,
