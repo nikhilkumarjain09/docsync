@@ -5,5 +5,7 @@ export default NextAuth(authConfig).auth;
 
 export const config = {
   // Protect all routes except static files, next internals, and auth endpoints.
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|public|login|signup).*)'],
+  matcher: [
+    '/((?!api|_next/static|_next/image|favicon\\.ico|icon\\.png|assets|public|login|signup|verify).*)',
+  ],
 };
