@@ -2549,18 +2549,20 @@ function EditorWorkspaceContent({
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      <div className="grid grid-cols-1 gap-2 text-[11px]">
-                        <div className="rounded-lg border border-red-500/10 bg-red-500/5 p-2 text-red-800 dark:text-red-400">
+                      <div className="grid w-full min-w-0 grid-cols-1 gap-2 text-[11px]">
+                        <div className="min-w-0 rounded-lg border border-red-500/10 bg-red-500/5 p-2 text-red-800 dark:text-red-400">
                           <span className="block text-[9px] font-bold tracking-wider text-red-600 uppercase">
                             Original text
                           </span>
-                          {aiAssistResult.originalText}
+                          <p className="line-clamp-3 overflow-hidden break-words text-ellipsis">
+                            {aiAssistResult.originalText}
+                          </p>
                         </div>
-                        <div className="rounded-lg border border-emerald-500/10 bg-emerald-500/5 p-2 text-emerald-800 dark:text-emerald-400">
+                        <div className="min-w-0 rounded-lg border border-emerald-500/10 bg-emerald-500/5 p-2 text-emerald-800 dark:text-emerald-400">
                           <span className="block text-[9px] font-bold tracking-wider text-emerald-600 uppercase">
                             AI Improved text
                           </span>
-                          {aiAssistResult.improvedText}
+                          <p className="break-words">{aiAssistResult.improvedText}</p>
                         </div>
                       </div>
                       <div className="flex gap-2">
