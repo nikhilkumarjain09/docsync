@@ -17,6 +17,7 @@ enum Role {
 model User {
   id             String                 @id @default(cuid())
   email          String                 @unique
+  emailVerified  DateTime?
   name           String?
   hashedPassword String?
   image          String?
@@ -91,4 +92,14 @@ model FavoriteDocument {
   createdAt  DateTime @default(now())
 
   @@id([userId, documentId])
+}
+
+model VerificationToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expires   DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([email, token])
 }

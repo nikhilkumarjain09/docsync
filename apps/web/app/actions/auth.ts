@@ -6,6 +6,8 @@ import { signIn } from '@/auth';
 import bcrypt from 'bcryptjs';
 import { AuthError } from 'next-auth';
 import { z } from 'zod';
+import { randomBytes } from 'crypto';
+import { sendVerificationEmail } from '@/lib/mail';
 
 const CredentialsSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -30,22 +32,34 @@ export async function signUp(prevState: any, formData: FormData) {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create the unverified user
     await db.user.create({
       data: {
         email,
         hashedPassword,
         name: name || null,
+        emailVerified: null, // Unverified initially
       },
     });
 
-    // Automatically sign in the user after successful sign up
-    await signIn('credentials', {
-      email,
-      password,
-      redirect: false,
+    // Generate secure verification token
+    const token = randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours expiry
+
+    await db.verificationToken.create({
+      data: {
+        email,
+        token,
+        expires,
+      },
     });
 
-    return { success: true };
+    // Send verification email
+    await sendVerificationEmail(email, token);
+
+    // Return status so UI knows to prompt for verification
+    return { success: true, emailVerified: false, email };
   } catch (error) {
     if (
       error &&
@@ -75,6 +89,16 @@ export async function logIn(prevState: any, formData: FormData) {
   }
 
   try {
+    // Check if user exists and password is correct BEFORE signing in
+    // to determine if they need email verification
+    const user = await db.user.findUnique({ where: { email } });
+    if (user && user.hashedPassword) {
+      const passwordsMatch = await bcrypt.compare(password, user.hashedPassword);
+      if (passwordsMatch && !user.emailVerified) {
+        return { error: 'EmailNotVerified', email };
+      }
+    }
+
     await signIn('credentials', {
       email,
       password,
@@ -92,5 +116,118 @@ export async function logIn(prevState: any, formData: FormData) {
       }
     }
     throw error;
+  }
+}
+
+/**
+ * Resend verification token with rate limiting and secure token rotation
+ */
+export async function resendVerification(email: string) {
+  if (!email || typeof email !== 'string') {
+    return { error: 'Invalid email address' };
+  }
+
+  try {
+    // 1. Check if user is already verified
+    const user = await db.user.findUnique({ where: { email } });
+    if (!user) {
+      // Don't reveal account presence, act as if sent
+      return { success: true };
+    }
+
+    if (user.emailVerified) {
+      return { error: 'Email is already verified' };
+    }
+
+    // 2. Rate-limiting: Max 1 verification email every 60 seconds
+    const latestToken = await db.verificationToken.findFirst({
+      where: { email },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (latestToken) {
+      const timeSinceLast = Date.now() - latestToken.createdAt.getTime();
+      if (timeSinceLast < 60 * 1000) {
+        const secondsRemaining = Math.ceil((60 * 1000 - timeSinceLast) / 1000);
+        return {
+          error: `Please wait ${secondsRemaining} seconds before requesting another email.`,
+        };
+      }
+    }
+
+    // 3. Invalidate/Delete old verification tokens
+    await db.verificationToken.deleteMany({ where: { email } });
+
+    // 4. Generate new token
+    const token = randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours expiry
+
+    await db.verificationToken.create({
+      data: {
+        email,
+        token,
+        expires,
+      },
+    });
+
+    // 5. Send verification email
+    await sendVerificationEmail(email, token);
+
+    return { success: true };
+  } catch (error) {
+    console.error('[AUTH] Resend verification error:', error);
+    return { error: 'Failed to resend verification email' };
+  }
+}
+
+/**
+ * Validates a verification token, updates user status to verified, and deletes token
+ */
+export async function verifyTokenAction(token: string) {
+  if (!token || typeof token !== 'string') {
+    return { error: 'Verification token is required.' };
+  }
+
+  try {
+    // 1. Look up token in database
+    const dbToken = await db.verificationToken.findUnique({
+      where: { token },
+    });
+
+    if (!dbToken) {
+      return { error: 'This verification link is invalid or has already been used.' };
+    }
+
+    // 2. Check if token is expired
+    if (dbToken.expires < new Date()) {
+      // Invalidate expired token
+      await db.verificationToken.delete({ where: { token } });
+      return { error: 'This verification link has expired. Please request a new one.' };
+    }
+
+    // 3. Look up user
+    const user = await db.user.findUnique({
+      where: { email: dbToken.email },
+    });
+
+    if (!user) {
+      return { error: 'No account associated with this verification link was found.' };
+    }
+
+    // 4. Mark user email as verified
+    await db.user.update({
+      where: { email: dbToken.email },
+      data: { emailVerified: new Date() },
+    });
+
+    // 5. Delete token to prevent reuse
+    await db.verificationToken.delete({
+      where: { token },
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('[AUTH] Token verification error:', error);
+    return { error: 'Something went wrong during email verification.' };
   }
 }

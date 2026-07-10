@@ -1,11 +1,20 @@
 'use client';
 
-import { useActionState, useEffect, useState, useRef } from 'react';
+import { useActionState, useEffect, useState, useRef, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { logIn, signUp } from '@/app/actions/auth';
+import { logIn, signUp, resendVerification } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, RefreshCw, Users, Shield } from 'lucide-react';
+import {
+  FileText,
+  RefreshCw,
+  Users,
+  Shield,
+  Mail,
+  ArrowLeft,
+  CheckCircle2,
+  AlertCircle,
+} from 'lucide-react';
 
 // Premium document synchronization card mockup graphic
 function AuthGraphic() {
@@ -59,6 +68,14 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [announcement, setAnnouncement] = useState('');
 
+  // Email verification pending state
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'success' | 'error'>(
+    'idle',
+  );
+  const [resendMessage, setResendMessage] = useState('');
+  const [, startTransition] = useTransition();
+
   // Refs for focus management
   const loginEmailRef = useRef<HTMLInputElement>(null);
   const signupNameRef = useRef<HTMLInputElement>(null);
@@ -81,18 +98,40 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
   useEffect(() => {
     const handlePopState = () => {
       setIsSignup(window.location.pathname === '/signup');
+      setPendingVerificationEmail(null); // Clear pending state on navigation back/forward
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Redirect on successful authentication
+  // Redirect on successful authentication, or trigger verification pending screen
   useEffect(() => {
-    if (loginState?.success || signupState?.success) {
+    if (loginState?.success) {
       router.push('/');
       router.refresh();
+      return;
+    }
+
+    if (signupState?.success) {
+      if (signupState.emailVerified) {
+        router.push('/');
+        router.refresh();
+      } else {
+        Promise.resolve().then(() => {
+          setPendingVerificationEmail(signupState.email || '');
+        });
+      }
     }
   }, [loginState, signupState, router]);
+
+  // Intercept unverified logins to redirect to verification pending screen
+  useEffect(() => {
+    if (loginState?.error === 'EmailNotVerified') {
+      Promise.resolve().then(() => {
+        setPendingVerificationEmail(loginState.email || '');
+      });
+    }
+  }, [loginState]);
 
   // Handle mode toggles and history state updates
   const toggleMode = (targetSignup: boolean) => {
@@ -334,6 +373,98 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
     </motion.div>
   );
 
+  // Sub-component rendering for Verification Pending state
+  const renderVerificationPending = () => {
+    const handleResend = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!pendingVerificationEmail) return;
+
+      setResendStatus('sending');
+      setResendMessage('');
+
+      startTransition(async () => {
+        try {
+          const res = await resendVerification(pendingVerificationEmail);
+          if (res.success) {
+            setResendStatus('success');
+            setResendMessage('Verification email resent successfully.');
+          } else {
+            setResendStatus('error');
+            setResendMessage(res.error || 'Failed to resend email.');
+          }
+        } catch (_err) {
+          setResendStatus('error');
+          setResendMessage('An error occurred. Please try again.');
+        }
+      });
+    };
+
+    return (
+      <motion.div
+        key="verification-pending-container"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.25 }}
+        className="w-full space-y-6 text-center"
+      >
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-indigo-500/10">
+          <Mail className="h-7 w-7 text-indigo-500" />
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-foreground text-2xl font-bold tracking-tight">Verify your email</h3>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            We sent a verification link to <br />
+            <strong className="text-foreground font-semibold">
+              {pendingVerificationEmail}
+            </strong>. <br />
+            Please click it to activate your profile.
+          </p>
+        </div>
+
+        <form onSubmit={handleResend} className="space-y-4">
+          {resendMessage && (
+            <div
+              className={`flex items-center justify-center gap-2 rounded-xl p-3 text-xs leading-relaxed font-medium ${
+                resendStatus === 'success'
+                  ? 'bg-emerald-500/10 text-emerald-500'
+                  : 'bg-destructive/10 text-destructive'
+              }`}
+            >
+              {resendStatus === 'success' ? (
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+              ) : (
+                <AlertCircle className="h-4 w-4 shrink-0" />
+              )}
+              {resendMessage}
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            disabled={resendStatus === 'sending'}
+            className="w-full rounded-xl bg-violet-950 py-6 text-sm font-semibold text-white shadow-md transition-all duration-150 hover:bg-violet-900 active:scale-[0.99]"
+          >
+            {resendStatus === 'sending' ? 'Resending Link...' : 'Resend Verification Email'}
+          </Button>
+        </form>
+
+        <button
+          type="button"
+          onClick={() => {
+            setPendingVerificationEmail(null);
+            setResendStatus('idle');
+            setResendMessage('');
+          }}
+          className="text-muted-foreground hover:text-foreground mx-auto flex items-center justify-center gap-1 text-xs font-semibold transition-colors"
+        >
+          <ArrowLeft className="h-3 w-3" /> Back to Sign In
+        </button>
+      </motion.div>
+    );
+  };
+
   return (
     <div className="from-background to-muted/40 flex min-h-screen items-center justify-center bg-radial px-4 py-12">
       {/* Screen Reader Live region for accessible mode announcements */}
@@ -347,11 +478,21 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
           {/* Mobile Branding Banner */}
           <div className="flex flex-col items-center justify-center space-y-4 bg-gradient-to-br from-violet-950 via-purple-900 to-indigo-950 p-6 text-center text-white">
             <div className="rounded-xl bg-white/10 p-2.5 text-white">
-              <FileText className="h-6 w-6 animate-pulse text-purple-300" />
+              {pendingVerificationEmail ? (
+                <Mail className="h-6 w-6 animate-pulse text-purple-300" />
+              ) : (
+                <FileText className="h-6 w-6 animate-pulse text-purple-300" />
+              )}
             </div>
             <AnimatePresence mode="wait">
               <motion.div
-                key={isSignup ? 'signup-mobile-title' : 'login-mobile-title'}
+                key={
+                  pendingVerificationEmail
+                    ? 'verify-mobile-title'
+                    : isSignup
+                      ? 'signup-mobile-title'
+                      : 'login-mobile-title'
+                }
                 initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -5 }}
@@ -359,12 +500,18 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
                 className="space-y-1"
               >
                 <h2 className="text-xl font-extrabold tracking-tight">
-                  {isSignup ? 'Join your team' : 'Welcome back'}
+                  {pendingVerificationEmail
+                    ? 'Verify your email'
+                    : isSignup
+                      ? 'Join your team'
+                      : 'Welcome back'}
                 </h2>
                 <p className="text-xs text-indigo-100/80">
-                  {isSignup
-                    ? 'Co-author document version histories in real-time.'
-                    : 'Log in to continue to DocSync editor.'}
+                  {pendingVerificationEmail
+                    ? 'Check your inbox to activate your account.'
+                    : isSignup
+                      ? 'Co-author document version histories in real-time.'
+                      : 'Log in to continue to DocSync editor.'}
                 </p>
               </motion.div>
             </AnimatePresence>
@@ -373,31 +520,66 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
           {/* Mobile Form container */}
           <div className="p-6">
             <AnimatePresence mode="wait">
-              {isSignup ? renderSignupForm() : renderLoginForm()}
+              {pendingVerificationEmail
+                ? renderVerificationPending()
+                : isSignup
+                  ? renderSignupForm()
+                  : renderLoginForm()}
             </AnimatePresence>
           </div>
         </div>
       ) : (
         // Desktop Layout (Centered 880px Card with coordinated sliding transition)
         <div className="border-border bg-card relative flex h-[580px] w-full max-w-[880px] flex-row overflow-hidden rounded-3xl border shadow-2xl">
-          {/* 1. Branding / Marketing Slide Panel (translates left/right based on isSignup) */}
+          {/* 1. Branding / Marketing Slide Panel (translates left/right based on isSignup, centers if verifying) */}
           <motion.div
             className="absolute top-0 bottom-0 left-0 z-10 flex h-full w-1/2 flex-col justify-between bg-gradient-to-br from-violet-950 via-purple-900 to-indigo-950 p-12 text-white"
-            animate={{ x: isSignup ? '100%' : '0%' }}
+            animate={{ x: pendingVerificationEmail ? '0%' : isSignup ? '100%' : '0%' }}
             transition={{ type: 'tween', ease: 'easeInOut', duration: 0.45 }}
           >
-            <AnimatePresence mode="wait">{renderBrandContent()}</AnimatePresence>
+            <AnimatePresence mode="wait">
+              {pendingVerificationEmail ? (
+                <motion.div
+                  key="verify-brand"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="flex h-full flex-col justify-between text-center sm:items-start sm:text-left"
+                >
+                  <div className="space-y-4">
+                    <h2 className="text-3xl font-extrabold tracking-tight">Confirm your email</h2>
+                    <p className="max-w-sm text-sm text-indigo-100/90">
+                      We need to verify your email address to ensure your account security and
+                      enable secure collaboration.
+                    </p>
+                  </div>
+                  <div className="flex w-full items-center justify-center py-6">
+                    <AuthGraphic />
+                  </div>
+                  <div className="text-xs text-indigo-200/70">
+                    © {new Date().getFullYear()} DocSync. All rights reserved.
+                  </div>
+                </motion.div>
+              ) : (
+                renderBrandContent()
+              )}
+            </AnimatePresence>
           </motion.div>
 
-          {/* 2. Interactive Forms Slide Panel (translates right/left based on isSignup) */}
+          {/* 2. Interactive Forms Slide Panel (translates right/left based on isSignup, centers if verifying) */}
           <motion.div
             className="bg-card absolute top-0 right-0 bottom-0 z-0 flex h-full w-1/2 flex-col justify-center p-12"
-            animate={{ x: isSignup ? '-100%' : '0%' }}
+            animate={{ x: pendingVerificationEmail ? '0%' : isSignup ? '-100%' : '0%' }}
             transition={{ type: 'tween', ease: 'easeInOut', duration: 0.45 }}
           >
             <div className="flex w-full items-center justify-center">
               <AnimatePresence mode="wait">
-                {isSignup ? renderSignupForm() : renderLoginForm()}
+                {pendingVerificationEmail
+                  ? renderVerificationPending()
+                  : isSignup
+                    ? renderSignupForm()
+                    : renderLoginForm()}
               </AnimatePresence>
             </div>
           </motion.div>
