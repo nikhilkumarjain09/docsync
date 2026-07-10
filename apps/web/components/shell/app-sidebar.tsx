@@ -17,6 +17,10 @@ import {
   Settings,
   LogOut,
   Undo,
+  Pencil,
+  Copy,
+  Share2,
+  ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -63,10 +67,13 @@ export function AppSidebar({
   const pathname = usePathname();
 
   // Resize Handlers
-  const startResizing = React.useCallback((mouseDownEvent: React.MouseEvent) => {
-    mouseDownEvent.preventDefault();
-    setIsResizing(true);
-  }, [setIsResizing]);
+  const startResizing = React.useCallback(
+    (mouseDownEvent: React.MouseEvent) => {
+      mouseDownEvent.preventDefault();
+      setIsResizing(true);
+    },
+    [setIsResizing],
+  );
 
   const stopResizing = React.useCallback(() => {
     setIsResizing(false);
@@ -82,7 +89,7 @@ export function AppSidebar({
         }
       }
     },
-    [isResizing, setWidth]
+    [isResizing, setWidth],
   );
 
   React.useEffect(() => {
@@ -118,44 +125,50 @@ export function AppSidebar({
     };
   }, []);
 
-  const handleContextMenu = React.useCallback((e: React.MouseEvent, docId: string, docTitle: string, isFavorite: boolean) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    // Bounds check
-    const menuWidth = 160;
-    const menuHeight = 220;
-    const screenWidth = window.innerWidth;
-    const screenHeight = window.innerHeight;
-    
-    let adjustedX = e.clientX;
-    let adjustedY = e.clientY;
-    
-    if (adjustedX + menuWidth > screenWidth) {
-      adjustedX = screenWidth - menuWidth - 8;
-    }
-    if (adjustedY + menuHeight > screenHeight) {
-      adjustedY = screenHeight - menuHeight - 8;
-    }
-    
-    setContextMenu({
-      x: adjustedX,
-      y: adjustedY,
-      docId,
-      docTitle,
-      isFavorite,
-    });
-  }, []);
+  const handleContextMenu = React.useCallback(
+    (e: React.MouseEvent, docId: string, docTitle: string, isFavorite: boolean) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Bounds check
+      const menuWidth = 160;
+      const menuHeight = 220;
+      const screenWidth = window.innerWidth;
+      const screenHeight = window.innerHeight;
+
+      let adjustedX = e.clientX;
+      let adjustedY = e.clientY;
+
+      if (adjustedX + menuWidth > screenWidth) {
+        adjustedX = screenWidth - menuWidth - 8;
+      }
+      if (adjustedY + menuHeight > screenHeight) {
+        adjustedY = screenHeight - menuHeight - 8;
+      }
+
+      setContextMenu({
+        x: adjustedX,
+        y: adjustedY,
+        docId,
+        docTitle,
+        isFavorite,
+      });
+    },
+    [],
+  );
 
   // Dialog open states
   const [createOpen, setCreateOpen] = React.useState(false);
+  const [defaultTemplate, setDefaultTemplate] = React.useState('blank');
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [shareOpen, setShareOpen] = React.useState(false);
   const [renameOpen, setRenameOpen] = React.useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = React.useState(false);
   const [confirmPermDeleteOpen, setConfirmPermDeleteOpen] = React.useState(false);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
-  const [settingsTab, setSettingsTab] = React.useState<'profile' | 'appearance' | 'security' | 'sync'>('profile');
+  const [settingsTab, setSettingsTab] = React.useState<
+    'profile' | 'appearance' | 'security' | 'sync'
+  >('profile');
 
   // Target document for actions
   const [activeDocId, setActiveDocId] = React.useState<string | null>(null);
@@ -190,6 +203,11 @@ export function AppSidebar({
     localStorage.setItem('sidebar_collapsed', JSON.stringify(next));
   };
 
+  const openWithTemplate = (templateId: string) => {
+    setDefaultTemplate(templateId);
+    setCreateOpen(true);
+  };
+
   // Data lists
   const [documents, setDocuments] = React.useState<DocumentItem[]>([]);
   const [favorites, setFavorites] = React.useState<DocumentItem[]>([]);
@@ -197,29 +215,32 @@ export function AppSidebar({
   const [isLoading, setIsLoading] = React.useState(true);
   const hasFetchedOnce = React.useRef(false);
 
-  const fetchAllData = React.useCallback(async (silent = false) => {
-    if (!session?.user) return;
-    // Only show skeleton loading state on the very first fetch
-    if (!silent && !hasFetchedOnce.current) {
-      setIsLoading(true);
-    }
-    try {
-      const [docsRes, favsRes, trashRes] = await Promise.all([
-        fetch('/api/documents'),
-        fetch('/api/documents/favorites'),
-        fetch('/api/documents/trash'),
-      ]);
+  const fetchAllData = React.useCallback(
+    async (silent = false) => {
+      if (!session?.user) return;
+      // Only show skeleton loading state on the very first fetch
+      if (!silent && !hasFetchedOnce.current) {
+        setIsLoading(true);
+      }
+      try {
+        const [docsRes, favsRes, trashRes] = await Promise.all([
+          fetch('/api/documents'),
+          fetch('/api/documents/favorites'),
+          fetch('/api/documents/trash'),
+        ]);
 
-      if (docsRes.ok) setDocuments(await docsRes.json());
-      if (favsRes.ok) setFavorites(await favsRes.json());
-      if (trashRes.ok) setTrash(await trashRes.json());
-      hasFetchedOnce.current = true;
-    } catch {
-      toast.error('Failed to load documents list');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [session]);
+        if (docsRes.ok) setDocuments(await docsRes.json());
+        if (favsRes.ok) setFavorites(await favsRes.json());
+        if (trashRes.ok) setTrash(await trashRes.json());
+        hasFetchedOnce.current = true;
+      } catch {
+        toast.error('Failed to load documents list');
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [session],
+  );
 
   // Initial fetch only — no pathname dependency to avoid sidebar flicker
   React.useEffect(() => {
@@ -344,7 +365,7 @@ export function AppSidebar({
         width: isCollapsed ? 0 : width,
         transition: isResizing ? 'none' : 'width 250ms cubic-bezier(0.4, 0, 0.2, 1)',
       }}
-      className={`border-border bg-sidebar text-sidebar-foreground flex h-full flex-col border-r select-none relative group/sidebar ${
+      className={`border-border bg-sidebar text-sidebar-foreground group/sidebar relative flex h-full flex-col border-r select-none ${
         isResizing ? 'select-none' : ''
       } ${isCollapsed ? 'border-r-0' : ''} overflow-hidden`}
     >
@@ -352,14 +373,14 @@ export function AppSidebar({
       {!isCollapsed && (
         <div
           onMouseDown={startResizing}
-          className="absolute top-0 right-0 z-50 h-full w-1.5 cursor-col-resize hover:bg-primary/40 active:bg-primary/60 transition-colors group/resize"
+          className="hover:bg-primary/40 active:bg-primary/60 group/resize absolute top-0 right-0 z-50 h-full w-1.5 cursor-col-resize transition-colors"
         >
-          <div className="absolute right-0 top-0 h-full w-[1px] bg-border group-hover/resize:bg-primary/50" />
+          <div className="bg-border group-hover/resize:bg-primary/50 absolute top-0 right-0 h-full w-[1px]" />
         </div>
       )}
 
       {/* Top action and Title */}
-      <div className="border-sidebar-border flex items-center justify-between border-b px-4 py-3 shrink-0">
+      <div className="border-sidebar-border flex shrink-0 items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-2">
           <img
             src="/assets/docsyncIcon.png"
@@ -367,7 +388,7 @@ export function AppSidebar({
             className="h-7 w-7 rounded-lg object-contain shadow-md"
           />
           <span className="from-foreground to-foreground/80 bg-gradient-to-r bg-clip-text text-sm font-bold tracking-tight">
-            DocSync Workspace
+            DocSync
           </span>
         </div>
         <Button
@@ -377,7 +398,7 @@ export function AppSidebar({
             setIsCollapsed(true);
             localStorage.setItem('sidebar_collapsed_state', 'true');
           }}
-          className="text-muted-foreground hover:text-foreground h-7 w-7 rounded-md cursor-pointer hover:bg-sidebar-accent"
+          className="text-muted-foreground hover:text-foreground hover:bg-sidebar-accent h-7 w-7 cursor-pointer rounded-md"
           title="Collapse sidebar"
         >
           <ChevronLeft className="h-4 w-4" />
@@ -484,7 +505,14 @@ export function AppSidebar({
                     doc={doc}
                     isFavorited={favorites.some((f) => f.id === doc.id)}
                     onFavorite={() => handleToggleFavorite(doc.id)}
-                    onContextMenu={(e) => handleContextMenu(e, doc.id, doc.title, favorites.some((f) => f.id === doc.id))}
+                    onContextMenu={(e) =>
+                      handleContextMenu(
+                        e,
+                        doc.id,
+                        doc.title,
+                        favorites.some((f) => f.id === doc.id),
+                      )
+                    }
                     onRename={() => {
                       setActiveDocId(doc.id);
                       setActiveDocTitle(doc.title);
@@ -534,7 +562,14 @@ export function AppSidebar({
                     doc={doc}
                     isFavorited={favorites.some((f) => f.id === doc.id)}
                     onFavorite={() => handleToggleFavorite(doc.id)}
-                    onContextMenu={(e) => handleContextMenu(e, doc.id, doc.title, favorites.some((f) => f.id === doc.id))}
+                    onContextMenu={(e) =>
+                      handleContextMenu(
+                        e,
+                        doc.id,
+                        doc.title,
+                        favorites.some((f) => f.id === doc.id),
+                      )
+                    }
                     onRename={() => {
                       setActiveDocId(doc.id);
                       setActiveDocTitle(doc.title);
@@ -572,14 +607,14 @@ export function AppSidebar({
           {!collapsed.templates && (
             <div className="space-y-0.5 px-2">
               <button
-                onClick={() => setCreateOpen(true)}
+                onClick={() => openWithTemplate('notes')}
                 className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-muted-foreground flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-all"
               >
                 <BookOpen className="h-3.5 w-3.5" />
                 <span>Standard Meeting Notes</span>
               </button>
               <button
-                onClick={() => setCreateOpen(true)}
+                onClick={() => openWithTemplate('brief')}
                 className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-muted-foreground flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-all"
               >
                 <BookOpen className="h-3.5 w-3.5" />
@@ -655,7 +690,7 @@ export function AppSidebar({
               setSettingsTab('profile');
               setSettingsOpen(true);
             }}
-            className="flex max-w-[75%] cursor-pointer items-center gap-2 rounded-xl p-1 hover:bg-sidebar-accent/50 transition-all active:scale-[0.98]"
+            className="hover:bg-sidebar-accent/50 flex max-w-[75%] cursor-pointer items-center gap-2 rounded-xl p-1 transition-all active:scale-[0.98]"
             title="View profile details"
           >
             <Avatar className="h-8 w-8">
@@ -705,7 +740,7 @@ export function AppSidebar({
               href="https://github.com/nikhilkumarjain09"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-primary/80 underline hover:text-primary hover:underline-offset-2 flex items-center gap-1"
+              className="text-primary/80 hover:text-primary flex items-center gap-1 underline hover:underline-offset-2"
             >
               <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
@@ -717,7 +752,7 @@ export function AppSidebar({
               href="https://www.linkedin.com/in/nikhil-kumar-jain-b05909278/"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-primary/80 underline hover:text-primary hover:underline-offset-2 flex items-center gap-1"
+              className="text-primary/80 hover:text-primary flex items-center gap-1 underline hover:underline-offset-2"
             >
               <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
@@ -729,7 +764,14 @@ export function AppSidebar({
       </div>
 
       {/* Modals and Dialogs */}
-      <CreateDocumentDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <CreateDocumentDialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) setDefaultTemplate('blank');
+        }}
+        defaultTemplate={defaultTemplate}
+      />
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} defaultTab={settingsTab} />
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} documents={documents} />
 
@@ -777,39 +819,44 @@ export function AppSidebar({
       {contextMenu && (
         <div
           style={{ top: contextMenu.y, left: contextMenu.x }}
-          className="fixed z-50 min-w-[170px] overflow-hidden rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-md animate-in fade-in-50 zoom-in-95 duration-100 select-none"
+          className="border-border bg-popover text-popover-foreground animate-in fade-in-50 zoom-in-95 fixed z-50 min-w-[190px] overflow-hidden rounded-xl border p-1.5 shadow-md duration-100 select-none"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+          <div className="text-muted-foreground px-2 py-1 text-[10px] font-bold tracking-wider uppercase">
             Document Actions
           </div>
-          <div className="my-1 border-t border-border/40" />
+          <div className="border-border/40 my-1 border-t" />
           <button
             onClick={() => {
               router.push(`/documents/${contextMenu.docId}`);
               setContextMenu(null);
             }}
-            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-left font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer transition-colors"
+            className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-medium transition-colors"
           >
-            Open Document
+            <FileText className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+            <span>Open Document</span>
           </button>
           <button
             onClick={() => {
               window.open(`/documents/${contextMenu.docId}`, '_blank');
               setContextMenu(null);
             }}
-            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-left font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer transition-colors"
+            className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-medium transition-colors"
           >
-            Open in New Tab
+            <ExternalLink className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+            <span>Open in New Tab</span>
           </button>
           <button
             onClick={() => {
               handleToggleFavorite(contextMenu.docId);
               setContextMenu(null);
             }}
-            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-left font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer transition-colors"
+            className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-medium transition-colors"
           >
-            {contextMenu.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+            <Star
+              className={`h-3.5 w-3.5 shrink-0 ${contextMenu.isFavorite ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground'}`}
+            />
+            <span>{contextMenu.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}</span>
           </button>
           <button
             onClick={() => {
@@ -818,18 +865,20 @@ export function AppSidebar({
               setRenameOpen(true);
               setContextMenu(null);
             }}
-            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-left font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer transition-colors"
+            className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-medium transition-colors"
           >
-            Rename
+            <Pencil className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+            <span>Rename</span>
           </button>
           <button
             onClick={() => {
               handleDuplicate(contextMenu.docId);
               setContextMenu(null);
             }}
-            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-left font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer transition-colors"
+            className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-medium transition-colors"
           >
-            Duplicate
+            <Copy className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+            <span>Duplicate</span>
           </button>
           <button
             onClick={() => {
@@ -837,20 +886,33 @@ export function AppSidebar({
               setShareOpen(true);
               setContextMenu(null);
             }}
-            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-left font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer transition-colors"
+            className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-medium transition-colors"
           >
-            Share settings
+            <Share2 className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+            <span>Share settings</span>
           </button>
-          <div className="my-1 border-t border-border/40" />
+          <div className="border-border/40 my-1 border-t" />
           <button
             onClick={() => {
               setActiveDocId(contextMenu.docId);
               setConfirmDeleteOpen(true);
               setContextMenu(null);
             }}
-            className="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-left font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive cursor-pointer transition-colors"
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-semibold transition-colors"
           >
-            Move to Trash
+            <Trash2 className="text-destructive h-3.5 w-3.5 shrink-0" />
+            <span>Move to Trash</span>
+          </button>
+          <button
+            onClick={() => {
+              setActiveDocId(contextMenu.docId);
+              setConfirmPermDeleteOpen(true);
+              setContextMenu(null);
+            }}
+            className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/20 dark:hover:text-red-400"
+          >
+            <Trash2 className="h-3.5 w-3.5 shrink-0 text-red-600 dark:text-red-400" />
+            <span>Delete Permanently</span>
           </button>
         </div>
       )}

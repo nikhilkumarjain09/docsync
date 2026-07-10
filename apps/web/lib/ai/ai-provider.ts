@@ -3,15 +3,31 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamText, generateText } from 'ai';
 
 const groqApiKey = process.env.GROQ_API_KEY;
+const nvidiaApiKey = process.env.NVIDIA_API_KEY;
 const geminiApiKey = process.env.GEMINI_API_KEY;
 
-export const hasAiConfigured = !!(groqApiKey || geminiApiKey);
+export const hasAiConfigured = !!(groqApiKey || nvidiaApiKey || geminiApiKey);
 
-// Initialize Groq provider (using OpenAI-compatible SDK configured for Groq)
+// Diagnostics log on server spin-up
+console.log('[AI Provider] API Keys configuration state:', {
+  groq: !!groqApiKey,
+  nvidia: !!nvidiaApiKey,
+  gemini: !!geminiApiKey,
+});
+
+// Initialize Groq provider
 const groq = groqApiKey
   ? createOpenAI({
       baseURL: 'https://api.groq.com/openai/v1',
       apiKey: groqApiKey,
+    })
+  : null;
+
+// Initialize NVIDIA provider (OpenAI-compatible catalog endpoint)
+const nvidia = nvidiaApiKey
+  ? createOpenAI({
+      baseURL: 'https://integrate.api.nvidia.com/v1',
+      apiKey: nvidiaApiKey,
     })
   : null;
 
@@ -23,7 +39,7 @@ const google = geminiApiKey
   : null;
 
 /**
- * Streams text output using Groq (Llama) as primary, falling back to Gemini (Flash) if Groq fails or is unconfigured.
+ * Streams text output using first-available provider with fallback (Groq -> NVIDIA -> Gemini).
  */
 export async function streamTextWithFallback({
   system,
@@ -33,9 +49,12 @@ export async function streamTextWithFallback({
   prompt: string;
 }) {
   if (!hasAiConfigured) {
-    throw new Error('AI features are not configured. Set GROQ_API_KEY or GEMINI_API_KEY.');
+    throw new Error(
+      'AI features are not configured. Set GROQ_API_KEY, NVIDIA_API_KEY, or GEMINI_API_KEY.',
+    );
   }
 
+  // 1. Try Groq
   if (groq) {
     try {
       console.log('[AI] Attempting text stream with primary provider: Groq (Llama)');
@@ -46,20 +65,28 @@ export async function streamTextWithFallback({
       });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      console.warn('[AI] Groq streaming failed, attempting fallback to Gemini:', errMsg);
-      if (google) {
-        return await streamText({
-          model: google('gemini-2.0-flash'),
-          system,
-          prompt,
-        });
-      }
-      throw err;
+      console.warn('[AI] Groq streaming failed, attempting fallback:', errMsg);
     }
   }
 
+  // 2. Try NVIDIA
+  if (nvidia) {
+    try {
+      console.log('[AI] Attempting text stream with secondary provider: NVIDIA (Llama)');
+      return await streamText({
+        model: nvidia('meta/llama-3.3-70b-instruct'),
+        system,
+        prompt,
+      });
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn('[AI] NVIDIA streaming failed, attempting fallback:', errMsg);
+    }
+  }
+
+  // 3. Try Gemini
   if (google) {
-    console.log('[AI] Groq unconfigured. Streaming directly with Gemini (Flash)');
+    console.log('[AI] Attempting text stream with tertiary provider: Gemini (Flash)');
     return await streamText({
       model: google('gemini-2.0-flash'),
       system,
@@ -67,11 +94,11 @@ export async function streamTextWithFallback({
     });
   }
 
-  throw new Error('No active AI provider configured.');
+  throw new Error('No configured AI provider succeeded.');
 }
 
 /**
- * Generates text output using Groq as primary, falling back to Gemini if Groq fails or is unconfigured.
+ * Generates text output using first-available provider with fallback (Groq -> NVIDIA -> Gemini).
  */
 export async function generateTextWithFallback({
   system,
@@ -81,9 +108,12 @@ export async function generateTextWithFallback({
   prompt: string;
 }) {
   if (!hasAiConfigured) {
-    throw new Error('AI features are not configured. Set GROQ_API_KEY or GEMINI_API_KEY.');
+    throw new Error(
+      'AI features are not configured. Set GROQ_API_KEY, NVIDIA_API_KEY, or GEMINI_API_KEY.',
+    );
   }
 
+  // 1. Try Groq
   if (groq) {
     try {
       console.log('[AI] Attempting generation with primary provider: Groq (Llama)');
@@ -94,20 +124,28 @@ export async function generateTextWithFallback({
       });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      console.warn('[AI] Groq generation failed, attempting fallback to Gemini:', errMsg);
-      if (google) {
-        return await generateText({
-          model: google('gemini-2.0-flash'),
-          system,
-          prompt,
-        });
-      }
-      throw err;
+      console.warn('[AI] Groq generation failed, attempting fallback:', errMsg);
     }
   }
 
+  // 2. Try NVIDIA
+  if (nvidia) {
+    try {
+      console.log('[AI] Attempting generation with secondary provider: NVIDIA (Llama)');
+      return await generateText({
+        model: nvidia('meta/llama-3.3-70b-instruct'),
+        system,
+        prompt,
+      });
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn('[AI] NVIDIA generation failed, attempting fallback:', errMsg);
+    }
+  }
+
+  // 3. Try Gemini
   if (google) {
-    console.log('[AI] Groq unconfigured. Generating directly with Gemini (Flash)');
+    console.log('[AI] Attempting generation with tertiary provider: Gemini (Flash)');
     return await generateText({
       model: google('gemini-2.0-flash'),
       system,
@@ -115,5 +153,5 @@ export async function generateTextWithFallback({
     });
   }
 
-  throw new Error('No active AI provider configured.');
+  throw new Error('No configured AI provider succeeded.');
 }

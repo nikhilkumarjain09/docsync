@@ -43,11 +43,13 @@ export async function POST(request: NextRequest) {
 
   const userId = session.user.id;
 
-  // 2. Graceful unconfigured API key check
   if (!hasAiConfigured) {
     return NextResponse.json(
-      { error: 'AI features are currently unavailable. Set GROQ_API_KEY or GEMINI_API_KEY.' },
-      { status: 503 }
+      {
+        error:
+          'AI features are currently unavailable. Set GROQ_API_KEY, NVIDIA_API_KEY, or GEMINI_API_KEY.',
+      },
+      { status: 503 },
     );
   }
 
@@ -55,7 +57,7 @@ export async function POST(request: NextRequest) {
   if (isRateLimited(userId)) {
     return NextResponse.json(
       { error: 'Too many requests. Please wait a minute before trying again.' },
-      { status: 429 }
+      { status: 429 },
     );
   }
 
@@ -71,7 +73,7 @@ export async function POST(request: NextRequest) {
   if (!parseResult.success) {
     return NextResponse.json(
       { error: 'Invalid payload', details: parseResult.error.flatten().fieldErrors },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -86,13 +88,15 @@ export async function POST(request: NextRequest) {
   try {
     // 6. Stream summary back to client
     const stream = await streamTextWithFallback({
-      system: 'You are a professional editor. Summarize the following document content concisely in 2-3 bullet points.',
+      system:
+        'You are a professional editor. Summarize the following document content concisely in 2-3 bullet points.',
       prompt: `Document content to summarize:\n\n${text}`,
     });
 
     return stream.toTextStreamResponse();
-  } catch (e: any) {
-    console.error('[AI Summarize] Error generating summary:', e.message);
+  } catch (e) {
+    const errMsg = e instanceof Error ? e.message : String(e);
+    console.error('[AI Summarize] Error generating summary:', errMsg);
     return NextResponse.json({ error: 'Failed to process AI summary' }, { status: 500 });
   }
 }

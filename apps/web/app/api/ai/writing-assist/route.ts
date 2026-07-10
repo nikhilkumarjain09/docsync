@@ -43,11 +43,13 @@ export async function POST(request: NextRequest) {
 
   const userId = session.user.id;
 
-  // 2. Graceful check for unconfigured keys
   if (!hasAiConfigured) {
     return NextResponse.json(
-      { error: 'AI features are currently unavailable. Set GROQ_API_KEY or GEMINI_API_KEY.' },
-      { status: 503 }
+      {
+        error:
+          'AI features are currently unavailable. Set GROQ_API_KEY, NVIDIA_API_KEY, or GEMINI_API_KEY.',
+      },
+      { status: 503 },
     );
   }
 
@@ -55,7 +57,7 @@ export async function POST(request: NextRequest) {
   if (isRateLimited(userId)) {
     return NextResponse.json(
       { error: 'Too many requests. Please wait a minute before trying again.' },
-      { status: 429 }
+      { status: 429 },
     );
   }
 
@@ -71,7 +73,7 @@ export async function POST(request: NextRequest) {
   if (!parseResult.success) {
     return NextResponse.json(
       { error: 'Invalid payload', details: parseResult.error.flatten().fieldErrors },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -85,7 +87,10 @@ export async function POST(request: NextRequest) {
 
   // Viewers cannot modify documents, so they shouldn't run writing assist
   if (role === 'VIEWER') {
-    return NextResponse.json({ error: 'Access denied: Viewers cannot edit documents' }, { status: 403 });
+    return NextResponse.json(
+      { error: 'Access denied: Viewers cannot edit documents' },
+      { status: 403 },
+    );
   }
 
   try {
@@ -102,7 +107,8 @@ Return ONLY the raw improved paragraph text. Do not wrap it in quotes, markdown 
 `;
 
     const { text: improvedText } = await generateTextWithFallback({
-      system: 'You are an expert copywriter. Improve the text as requested, returning only the revised copy.',
+      system:
+        'You are an expert copywriter. Improve the text as requested, returning only the revised copy.',
       prompt: promptText,
     });
 
@@ -110,9 +116,12 @@ Return ONLY the raw improved paragraph text. Do not wrap it in quotes, markdown 
       originalText: text,
       improvedText: improvedText.trim(),
     });
-  } catch (e: any) {
-    console.error('[AI Assist] Writing assist failed:', e.message);
-    const detailMsg = e.message || String(e);
-    return NextResponse.json({ error: `Failed to process writing assist: ${detailMsg}` }, { status: 500 });
+  } catch (e) {
+    const errMsg = e instanceof Error ? e.message : String(e);
+    console.error('[AI Assist] Writing assist failed:', errMsg);
+    return NextResponse.json(
+      { error: `Failed to process writing assist: ${errMsg}` },
+      { status: 500 },
+    );
   }
 }

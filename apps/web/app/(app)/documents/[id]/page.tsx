@@ -369,6 +369,7 @@ function EditorWorkspaceContent({
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [previewingSnapshot, setPreviewingSnapshot] = useState<Snapshot | null>(null);
   const [previewText, setPreviewText] = useState('');
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   // Custom document appearance & lock configurations
   const [fontFamily, setFontFamily] = useState<'sans' | 'serif' | 'mono'>('sans');
@@ -393,6 +394,8 @@ function EditorWorkspaceContent({
   const [confirmRestoreOpen, setConfirmRestoreOpen] = useState(false);
   const [confirmTrashOpen, setConfirmTrashOpen] = useState(false);
   const [pendingRestoreSnapshot, setPendingRestoreSnapshot] = useState<Snapshot | null>(null);
+  const [isAllVersionsOpen, setIsAllVersionsOpen] = useState(false);
+  const [versionsSearchQuery, setVersionsSearchQuery] = useState('');
 
   // Notion Slash Menu state
   const [slashMenu, setSlashMenu] = useState<{
@@ -990,7 +993,7 @@ function EditorWorkspaceContent({
               `
           <p class="bookmark-block border border-border p-3 rounded-lg flex items-center gap-3 bg-muted/10 my-2 cursor-pointer hover:bg-muted/20 transition-colors" contenteditable="false">
             <span class="flex-1 space-y-0.5 min-w-0">
-              <span class="font-bold text-xs block text-foreground truncate">DocSync Workspace</span>
+              <span class="font-bold text-xs block text-foreground truncate">DocSync</span>
               <span class="text-[10px] text-muted-foreground block truncate">A collaborative local-first real-time workspace.</span>
             </span>
             <span class="text-[10px] font-mono text-primary select-all shrink-0">https://docsync.dev</span>
@@ -1248,7 +1251,8 @@ function EditorWorkspaceContent({
 
   const handlePreviewSnapshot = async (snapshot: Snapshot) => {
     setPreviewingSnapshot(snapshot);
-    setPreviewText('Loading version details...');
+    setIsPreviewLoading(true);
+    setPreviewText('');
     setIsPreviewOpen(true);
 
     try {
@@ -1269,6 +1273,8 @@ function EditorWorkspaceContent({
       tempDoc.destroy();
     } catch {
       setPreviewText('Failed to render snapshot preview.');
+    } finally {
+      setIsPreviewLoading(false);
     }
   };
 
@@ -1954,7 +1960,6 @@ function EditorWorkspaceContent({
               </div>
             )}
           </div>
-
           {/* Unconfigured API Key friendly alert banner */}
           {!isAiConfigured && (
             <div className="border-warning/20 bg-warning/5 flex shrink-0 items-center gap-3 rounded-xl border p-4 text-xs">
@@ -1966,8 +1971,11 @@ function EditorWorkspaceContent({
                 <p className="text-muted-foreground mt-0.5">
                   AI Summarizer, writing assist, and semantic version search are currently disabled
                   because no API keys were found. To enable them, set{' '}
-                  <code className="bg-muted rounded px-1 font-mono text-[10px]">GROQ_API_KEY</code>{' '}
-                  or{' '}
+                  <code className="bg-muted rounded px-1 font-mono text-[10px]">GROQ_API_KEY</code>,{' '}
+                  <code className="bg-muted rounded px-1 font-mono text-[10px]">
+                    NVIDIA_API_KEY
+                  </code>
+                  , or{' '}
                   <code className="bg-muted rounded px-1 font-mono text-[10px]">
                     GEMINI_API_KEY
                   </code>{' '}
@@ -2673,6 +2681,7 @@ function EditorWorkspaceContent({
             aiSearchResult={aiSearchResult}
             handleAiVersionSearch={handleAiVersionSearch}
             isViewer={isViewer}
+            onShowAllVersions={() => setIsAllVersionsOpen(true)}
           />
         </aside>
       </div>
@@ -2711,6 +2720,7 @@ function EditorWorkspaceContent({
                 aiSearchResult={aiSearchResult}
                 handleAiVersionSearch={handleAiVersionSearch}
                 isViewer={isViewer}
+                onShowAllVersions={() => setIsAllVersionsOpen(true)}
               />
             </div>
           </div>
@@ -2751,6 +2761,96 @@ function EditorWorkspaceContent({
         onConfirm={handleMoveToTrash}
       />
 
+      {/* Slide-over sheet/sidebar to view all versions */}
+      {isAllVersionsOpen && (
+        <div className="bg-background/60 fixed inset-0 z-50 flex justify-end backdrop-blur-xs">
+          <div className="absolute inset-0" onClick={() => setIsAllVersionsOpen(false)} />
+          <div className="border-border bg-card animate-in slide-in-from-right relative z-10 flex h-full w-[380px] max-w-full flex-col border-l p-6 shadow-2xl duration-200">
+            <div className="flex items-center justify-between border-b pb-4">
+              <div>
+                <h3 className="text-foreground text-base font-bold">All Checkpoints</h3>
+                <p className="text-muted-foreground mt-0.5 text-[10px]">
+                  Restore or preview any past checkpoint.
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsAllVersionsOpen(false)}
+                className="h-8 w-8"
+              >
+                <X className="h-4.5 w-4.5" />
+              </Button>
+            </div>
+            <div className="py-3">
+              <div className="relative">
+                <Search className="text-muted-foreground absolute top-2.5 left-3 h-3.5 w-3.5" />
+                <input
+                  placeholder="Search by label or author..."
+                  value={versionsSearchQuery}
+                  onChange={(e) => setVersionsSearchQuery(e.target.value)}
+                  className="border-input bg-background/50 focus:border-primary focus:ring-primary/20 flex h-9 w-full rounded-lg border px-3 py-1 pl-9 text-xs outline-none focus:ring-1 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </div>
+            </div>
+            <div className="flex-1 scrollbar-thin space-y-3 overflow-y-auto pr-1">
+              {snapshots.filter((s) => {
+                const query = versionsSearchQuery.toLowerCase();
+                return (
+                  (s.label || '').toLowerCase().includes(query) ||
+                  (s.creator?.name || s.creator?.email || '').toLowerCase().includes(query)
+                );
+              }).length === 0 ? (
+                <div className="text-muted-foreground py-8 text-center text-xs italic">
+                  No checkpoints match search query.
+                </div>
+              ) : (
+                snapshots
+                  .filter((s) => {
+                    const query = versionsSearchQuery.toLowerCase();
+                    return (
+                      (s.label || '').toLowerCase().includes(query) ||
+                      (s.creator?.name || s.creator?.email || '').toLowerCase().includes(query)
+                    );
+                  })
+                  .map((snap) => (
+                    <div
+                      key={snap.id}
+                      className="border-border/20 space-y-1.5 border-b pb-3 text-xs last:border-0 last:pb-0"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-foreground font-bold break-all">{snap.label}</span>
+                        <span className="text-muted-foreground shrink-0 font-mono text-[10px]">
+                          {new Date(snap.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="text-muted-foreground text-[10px]">
+                        Saved by: {snap.creator?.name || snap.creator?.email || 'Anonymous'}
+                      </div>
+                      <div className="flex gap-2.5 pt-0.5">
+                        <button
+                          onClick={() => handlePreviewSnapshot(snap)}
+                          className="text-primary text-[10px] font-semibold hover:underline"
+                        >
+                          Preview
+                        </button>
+                        {!isViewer && (
+                          <button
+                            onClick={() => handleRestoreSnapshotTrigger(snap)}
+                            className="text-[10px] font-semibold text-violet-500 hover:underline"
+                          >
+                            Restore
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Bigger scrollable document-prose Snapshot Preview Dialog */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
         <DialogContent className="border-border bg-card flex h-[80vh] w-[90vw] max-w-4xl flex-col rounded-2xl border p-6">
@@ -2788,11 +2888,36 @@ function EditorWorkspaceContent({
 
           <div className="bg-muted/10 border-border/30 mt-4 flex-1 overflow-y-auto rounded-xl border px-4 py-6">
             <div className="mx-auto max-w-3xl">
-              {/* Styled like document prose */}
-              <div
-                className="prose dark:prose-invert max-w-none text-base leading-relaxed break-words"
-                dangerouslySetInnerHTML={{ __html: previewText }}
-              />
+              {isPreviewLoading ? (
+                <div className="animate-pulse space-y-6">
+                  {/* Simulate title skeleton */}
+                  <div className="bg-muted-foreground/15 h-7 w-2/3 rounded-lg" />
+
+                  {/* Simulate content paragraphs */}
+                  <div className="space-y-3 pt-4">
+                    <div className="bg-muted-foreground/10 h-4 w-full rounded" />
+                    <div className="bg-muted-foreground/10 h-4 w-[95%] rounded" />
+                    <div className="bg-muted-foreground/10 h-4 w-[90%] rounded" />
+                    <div className="bg-muted-foreground/10 h-4 w-[85%] rounded" />
+                  </div>
+                  <div className="space-y-3 pt-4">
+                    <div className="bg-muted-foreground/10 h-4 w-full rounded" />
+                    <div className="bg-muted-foreground/10 h-4 w-[92%] rounded" />
+                    <div className="bg-muted-foreground/10 h-4 w-[80%] rounded" />
+                  </div>
+                  <div className="space-y-3 pt-4">
+                    <div className="bg-muted-foreground/10 h-4 w-full rounded" />
+                    <div className="bg-muted-foreground/10 h-4 w-[96%] rounded" />
+                    <div className="bg-muted-foreground/10 h-4 w-[75%] rounded" />
+                  </div>
+                </div>
+              ) : (
+                /* Styled like document prose */
+                <div
+                  className="prose dark:prose-invert max-w-none text-base leading-relaxed break-words"
+                  dangerouslySetInnerHTML={{ __html: previewText }}
+                />
+              )}
             </div>
           </div>
         </DialogContent>
@@ -2820,6 +2945,7 @@ interface SidebarContentProps {
   aiSearchResult: { matchedSnapshotId: string | null; rationale: string } | null;
   handleAiVersionSearch: (e: React.FormEvent) => void;
   isViewer: boolean;
+  onShowAllVersions: () => void;
 }
 
 function SidebarContent({
@@ -2841,6 +2967,7 @@ function SidebarContent({
   aiSearchResult,
   handleAiVersionSearch,
   isViewer,
+  onShowAllVersions,
 }: SidebarContentProps) {
   return (
     <div className="space-y-6">
@@ -2925,7 +3052,7 @@ function SidebarContent({
               No checkpoints recorded.
             </p>
           ) : (
-            snapshots.map((snap) => {
+            snapshots.slice(0, 3).map((snap) => {
               const isMatched = aiSearchResult?.matchedSnapshotId === snap.id;
               return (
                 <div
@@ -2967,6 +3094,17 @@ function SidebarContent({
             })
           )}
         </div>
+
+        {snapshots.length > 3 && (
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={onShowAllVersions}
+            className="text-primary hover:bg-primary/5 hover:text-primary mt-1 w-full text-center text-[10px] font-bold"
+          >
+            Show all versions ({snapshots.length}) →
+          </Button>
+        )}
 
         {/* AI Summarize Block in Timeline Gutter */}
         {isAiConfigured && (

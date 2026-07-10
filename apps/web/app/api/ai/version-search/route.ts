@@ -43,11 +43,13 @@ export async function POST(request: NextRequest) {
 
   const userId = session.user.id;
 
-  // 2. Graceful unconfigured API key check
   if (!hasAiConfigured) {
     return NextResponse.json(
-      { error: 'AI features are currently unavailable. Set GROQ_API_KEY or GEMINI_API_KEY.' },
-      { status: 503 }
+      {
+        error:
+          'AI features are currently unavailable. Set GROQ_API_KEY, NVIDIA_API_KEY, or GEMINI_API_KEY.',
+      },
+      { status: 503 },
     );
   }
 
@@ -55,7 +57,7 @@ export async function POST(request: NextRequest) {
   if (isRateLimited(userId)) {
     return NextResponse.json(
       { error: 'Too many requests. Please wait a minute before trying again.' },
-      { status: 429 }
+      { status: 429 },
     );
   }
 
@@ -71,7 +73,7 @@ export async function POST(request: NextRequest) {
   if (!parseResult.success) {
     return NextResponse.json(
       { error: 'Invalid payload', details: parseResult.error.flatten().fieldErrors },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -120,7 +122,8 @@ Return ONLY the raw JSON object. Do not wrap it in markdown code blocks or add t
 `;
 
     const { text: aiText } = await generateTextWithFallback({
-      system: 'You are an AI assistant that finds and matches historical document checkpoints based on natural language queries.',
+      system:
+        'You are an AI assistant that finds and matches historical document checkpoints based on natural language queries.',
       prompt: promptText,
     });
 
@@ -140,8 +143,9 @@ Return ONLY the raw JSON object. Do not wrap it in markdown code blocks or add t
     }
 
     return NextResponse.json(parsedResult);
-  } catch (e: any) {
-    console.error('[AI Search] Semantic version search failed:', e.message);
+  } catch (e) {
+    const errMsg = e instanceof Error ? e.message : String(e);
+    console.error('[AI Search] Semantic version search failed:', errMsg);
     return NextResponse.json({ error: 'Failed to execute semantic search' }, { status: 500 });
   }
 }

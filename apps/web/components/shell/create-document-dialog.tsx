@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 interface CreateDocumentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultTemplate?: string;
 }
 
 const TEMPLATES = [
@@ -36,7 +37,11 @@ const TEMPLATES = [
   },
 ];
 
-export function CreateDocumentDialog({ open, onOpenChange }: CreateDocumentDialogProps) {
+export function CreateDocumentDialog({
+  open,
+  onOpenChange,
+  defaultTemplate = 'blank',
+}: CreateDocumentDialogProps) {
   const [title, setTitle] = React.useState('');
   const [selectedTemplate, setSelectedTemplate] = React.useState('blank');
   const [isLoading, setIsLoading] = React.useState(false);
@@ -46,16 +51,22 @@ export function CreateDocumentDialog({ open, onOpenChange }: CreateDocumentDialo
     if (open) {
       Promise.resolve().then(() => {
         setTitle('');
-        setSelectedTemplate('blank');
+        setSelectedTemplate(defaultTemplate);
       });
     }
-  }, [open]);
+  }, [open, defaultTemplate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    const docTitle = title.trim() || 'Untitled';
+    const defaultTitle =
+      selectedTemplate === 'notes'
+        ? 'Meeting Notes'
+        : selectedTemplate === 'brief'
+          ? 'Project Brief'
+          : 'Untitled';
+    const docTitle = title.trim() || defaultTitle;
 
     try {
       const res = await fetch('/api/documents', {

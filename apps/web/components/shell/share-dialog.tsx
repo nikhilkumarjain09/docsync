@@ -191,15 +191,15 @@ export function ShareDialog({
                 onChange={(e) => setInviteEmail(e.target.value)}
                 disabled={isInviting}
                 required
-                className="h-9 w-full"
+                className="h-9 w-full min-w-0"
               />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <select
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value as 'OWNER' | 'EDITOR' | 'VIEWER')}
                 disabled={isInviting}
-                className="border-input bg-background h-9 flex-1 rounded-lg border px-3 text-xs font-medium outline-none"
+                className="border-input bg-background h-9 w-full rounded-lg border px-3 text-xs font-medium outline-none sm:flex-1"
               >
                 <option value="EDITOR">Editor</option>
                 <option value="VIEWER">Viewer</option>
@@ -209,7 +209,7 @@ export function ShareDialog({
                 type="submit"
                 disabled={isInviting}
                 size="sm"
-                className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 flex-1 gap-1.5"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 w-full shrink-0 gap-1.5 sm:flex-1"
               >
                 {isInviting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 Invite
@@ -223,7 +223,7 @@ export function ShareDialog({
             Collaborators
           </span>
 
-          <div className="max-h-[180px] scrollbar-thin space-y-2 overflow-y-auto pr-1">
+          <div className="max-h-[180px] scrollbar-thin space-y-2 overflow-x-hidden overflow-y-auto pr-1">
             {loadingList ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
@@ -323,8 +323,8 @@ export function ShareDialog({
           <span className="text-muted-foreground block text-[10px] font-bold tracking-wider uppercase">
             Share Link
           </span>
-          <div className="flex items-center gap-2">
-            <div className="bg-muted text-muted-foreground border-border/30 min-w-0 flex-1 truncate rounded-lg border px-3 py-2 font-mono text-[11px] select-all">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="bg-muted text-muted-foreground border-border/30 w-full min-w-0 truncate rounded-lg border px-3 py-2 font-mono text-[11px] select-all">
               {documentId
                 ? `${window.location.origin}/documents/${documentId}`
                 : 'Generating link...'}
@@ -335,7 +335,7 @@ export function ShareDialog({
               size="sm"
               onClick={handleCopyLink}
               disabled={!documentId}
-              className="h-9 shrink-0 gap-1.5"
+              className="h-9 w-full shrink-0 gap-1.5 sm:w-auto"
             >
               {isCopied ? (
                 <Check className="h-3.5 w-3.5 text-emerald-600" />
