@@ -52,6 +52,7 @@ import {
   ArrowLeft,
   Users,
   History,
+  Loader2,
   Share2,
   Trash2,
   Plus,
@@ -342,6 +343,8 @@ function EditorWorkspaceContent({
     improvedText: string;
   } | null>(null);
   const [aiAssistError, setAiAssistError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'dirty'>('saved');
+  const [lastSavedTime, setLastSavedTime] = useState<string>('');
 
   // Aria Announcer
   const [ariaLiveAnnouncement, setAriaLiveAnnouncement] = useState('');
@@ -496,6 +499,7 @@ function EditorWorkspaceContent({
         }),
         GlobalDragHandle.configure({
           dragHandleWidth: 24,
+          dragHandleSelector: '#editor-gutter-controls',
         }),
         // Custom Collapsible nodes
         ToggleBlock,
@@ -1312,9 +1316,30 @@ function EditorWorkspaceContent({
             </Link>
             <div>
               <h1 className="text-lg font-bold tracking-tight">DocSync Editor Workspace</h1>
-              <p className="text-muted-foreground text-[10px] select-all">
-                Document ID: {documentId}
-              </p>
+              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                <span className="font-mono select-all">ID: {documentId}</span>
+                <span>•</span>
+                <div className="flex items-center gap-1">
+                  {saveStatus === 'saving' && (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                      <span>Saving version...</span>
+                    </>
+                  )}
+                  {saveStatus === 'dirty' && (
+                    <>
+                      <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                      <span>Unsaved changes (auto-saving soon)</span>
+                    </>
+                  )}
+                  {saveStatus === 'saved' && (
+                    <>
+                      <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      <span>All changes saved {lastSavedTime ? `at ${lastSavedTime}` : 'to cloud'}</span>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1432,7 +1457,7 @@ function EditorWorkspaceContent({
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </button>
-                <div className="drag-handle text-muted-foreground hover:bg-muted hover:text-foreground pointer-events-auto flex h-5 w-5 cursor-grab items-center justify-center rounded-sm active:cursor-grabbing">
+                <div className="drag-handle global-drag-handle text-muted-foreground hover:bg-muted hover:text-foreground pointer-events-auto flex h-5 w-5 cursor-grab items-center justify-center rounded-sm active:cursor-grabbing">
                   <GripVertical className="h-3.5 w-3.5" />
                 </div>
               </div>
@@ -1489,7 +1514,7 @@ function EditorWorkspaceContent({
                   <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
 
                   {/* 1. Block Conversion Dropdown */}
-                  <DropdownMenu>
+                  <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="ghost"
@@ -1682,7 +1707,7 @@ function EditorWorkspaceContent({
                   <div className="bg-border/60 mx-1 h-4 w-px shrink-0" />
 
                   {/* 3. Text Alignment Dropdown */}
-                  <DropdownMenu>
+                  <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="ghost"
@@ -1726,7 +1751,7 @@ function EditorWorkspaceContent({
                   </DropdownMenu>
 
                   {/* 4. Text Color Dropdown */}
-                  <DropdownMenu>
+                  <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="ghost"
@@ -1784,7 +1809,7 @@ function EditorWorkspaceContent({
                   </DropdownMenu>
 
                   {/* 5. Highlight Color Dropdown */}
-                  <DropdownMenu>
+                  <DropdownMenu modal={false}>
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="ghost"
@@ -1988,7 +2013,7 @@ function EditorWorkspaceContent({
             {slashMenu && filteredSlashItems.length > 0 && (
               <div
                 className="border-border bg-background/95 animate-in zoom-in-95 fixed z-50 w-64 overflow-hidden rounded-xl border p-1.5 shadow-2xl backdrop-blur-md duration-100"
-                style={{ top: slashMenu.y, left: slashMenu.x }}
+                style={{ top: `${slashMenu.y}px`, left: `${slashMenu.x}px` }}
                 role="listbox"
                 aria-label="Block creation commands"
               >

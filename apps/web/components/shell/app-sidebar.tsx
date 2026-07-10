@@ -570,7 +570,7 @@ export function AppSidebar() {
           </div>
           <div className="mt-0.5 flex items-center gap-2">
             <a
-              href="https://github.com/nikhiljain"
+              href="https://github.com/nikhilkumarjain09"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary/80 underline hover:text-primary hover:underline-offset-2 flex items-center gap-1"
@@ -582,7 +582,7 @@ export function AppSidebar() {
             </a>
             <span className="text-muted-foreground/30">•</span>
             <a
-              href="https://linkedin.com/in/nikhiljain"
+              href="https://www.linkedin.com/in/nikhil-kumar-jain-b05909278/"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary/80 underline hover:text-primary hover:underline-offset-2 flex items-center gap-1"

@@ -112,7 +112,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab = 'profile' }: S
             <div>Nikhil Jain</div>
             <div className="flex items-center gap-2 pt-0.5">
               <a
-                href="https://github.com/nikhiljain"
+                href="https://github.com/nikhilkumarjain09"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-primary hover:underline flex items-center gap-1"
@@ -124,7 +124,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab = 'profile' }: S
               </a>
               <span>•</span>
               <a
-                href="https://linkedin.com/in/nikhiljain"
+                href="https://www.linkedin.com/in/nikhil-kumar-jain-b05909278/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-primary hover:underline flex items-center gap-1"
