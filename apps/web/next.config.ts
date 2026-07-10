@@ -4,10 +4,6 @@ import path from 'path';
 const nextConfig: NextConfig = {
   /* config options here */
   serverExternalPackages: ['yjs', 'y-prosemirror'],
-  outputFileTracingIncludes: {
-    '/*': ['../../packages/db/dist/generated/client/libquery_engine-*.node'],
-    '/api/**/*': ['../../packages/db/dist/generated/client/libquery_engine-*.node'],
-  },
   turbopack: {
     resolveAlias: {
       yjs: './node_modules/yjs',
