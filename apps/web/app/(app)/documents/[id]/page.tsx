@@ -761,6 +761,20 @@ function EditorWorkspaceContent({
     return () => window.removeEventListener('scroll', handleScroll);
   }, [slashMenu]);
 
+  // Synchronize document titles with renames from the sidebar
+  useEffect(() => {
+    const handleDocumentUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<{ id: string; title: string }>;
+      if (customEvent.detail && customEvent.detail.id === documentId) {
+        setDocMetadata((prev) => (prev ? { ...prev, title: customEvent.detail.title } : null));
+      }
+    };
+    window.addEventListener('document-updated', handleDocumentUpdate);
+    return () => {
+      window.removeEventListener('document-updated', handleDocumentUpdate);
+    };
+  }, [documentId]);
+
   // ─── Keyboard Shortcuts Setup ─────────────────────────────────────────
   useEffect(() => {
     if (!editor || isViewer) return;
@@ -1948,6 +1962,11 @@ function EditorWorkspaceContent({
                     });
                     if (res.ok) {
                       toast.success('Title saved');
+                      window.dispatchEvent(
+                        new CustomEvent('document-updated', {
+                          detail: { id: documentId, title: docMetadata.title.trim() },
+                        }),
+                      );
                     } else {
                       toast.error('Failed to update title');
                     }

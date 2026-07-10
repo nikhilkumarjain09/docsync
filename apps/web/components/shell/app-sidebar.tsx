@@ -256,6 +256,16 @@ export function AppSidebar({
     }
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  React.useEffect(() => {
+    const handleDocumentUpdate = () => {
+      fetchAllData(true);
+    };
+    window.addEventListener('document-updated', handleDocumentUpdate);
+    return () => {
+      window.removeEventListener('document-updated', handleDocumentUpdate);
+    };
+  }, [fetchAllData]);
+
   // Operations
   const handleRename = async (newTitle: string) => {
     if (!activeDocId) return;
@@ -267,6 +277,11 @@ export function AppSidebar({
       });
       if (res.ok) {
         toast.success('Document renamed');
+        window.dispatchEvent(
+          new CustomEvent('document-updated', {
+            detail: { id: activeDocId, title: newTitle },
+          }),
+        );
         fetchAllData();
       } else {
         const err = await res.json();
@@ -987,11 +1002,11 @@ function DocumentRow({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-32">
-            <DropdownMenuItem onClick={onRename}>Rename</DropdownMenuItem>
-            <DropdownMenuItem onClick={onDuplicate}>Duplicate</DropdownMenuItem>
-            <DropdownMenuItem onClick={onShare}>Share</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onRename}>Rename</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onDuplicate}>Duplicate</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onShare}>Share</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onDelete} destructive>
+            <DropdownMenuItem onSelect={onDelete} destructive>
               Move to Trash
             </DropdownMenuItem>
           </DropdownMenuContent>
