@@ -32,6 +32,7 @@ import { ShareDialog } from './share-dialog';
 import { RenameDialog } from './rename-dialog';
 import { ConfirmDialog } from './confirm-dialog';
 import { CommandPalette } from './command-palette';
+import { SettingsDialog } from './settings-dialog';
 import { toast } from 'sonner';
 
 interface DocumentItem {
@@ -54,6 +55,8 @@ export function AppSidebar() {
   const [renameOpen, setRenameOpen] = React.useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = React.useState(false);
   const [confirmPermDeleteOpen, setConfirmPermDeleteOpen] = React.useState(false);
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [settingsTab, setSettingsTab] = React.useState<'profile' | 'appearance' | 'security' | 'sync'>('profile');
 
   // Target document for actions
   const [activeDocId, setActiveDocId] = React.useState<string | null>(null);
@@ -500,7 +503,14 @@ export function AppSidebar() {
       {/* User profile & actions at bottom */}
       <div className="border-sidebar-border bg-sidebar-muted/10 flex flex-col border-t p-3">
         <div className="mb-2 flex items-center justify-between gap-3">
-          <div className="flex max-w-[75%] items-center gap-2">
+          <div
+            onClick={() => {
+              setSettingsTab('profile');
+              setSettingsOpen(true);
+            }}
+            className="flex max-w-[75%] cursor-pointer items-center gap-2 rounded-xl p-1 hover:bg-sidebar-accent/50 transition-all active:scale-[0.98]"
+            title="View profile details"
+          >
             <Avatar className="h-8 w-8">
               <AvatarFallback>
                 {(session.user.name || session.user.email || 'U').slice(0, 2)}
@@ -522,7 +532,12 @@ export function AppSidebar() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem onClick={() => toast.info('Settings panel under construction')}>
+              <DropdownMenuItem
+                onClick={() => {
+                  setSettingsTab('appearance');
+                  setSettingsOpen(true);
+                }}
+              >
                 <Settings className="mr-2 h-3.5 w-3.5" /> Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -543,7 +558,7 @@ export function AppSidebar() {
               href="https://github.com/nikhiljain"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-primary hover:underline"
+              className="text-primary/80 underline hover:text-primary hover:underline-offset-2"
             >
               GitHub
             </a>
@@ -552,7 +567,7 @@ export function AppSidebar() {
               href="https://linkedin.com/in/nikhiljain"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-primary hover:underline"
+              className="text-primary/80 underline hover:text-primary hover:underline-offset-2"
             >
               LinkedIn
             </a>
@@ -562,6 +577,7 @@ export function AppSidebar() {
 
       {/* Modals and Dialogs */}
       <CreateDocumentDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} defaultTab={settingsTab} />
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} documents={documents} />
 
       {activeDocId && (

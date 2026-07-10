@@ -96,14 +96,14 @@ function VerifyContent() {
         )}
 
         <h2 className="text-foreground mt-4 text-2xl font-bold tracking-tight">
-          {status === 'loading' && 'Verifying Email'}
-          {status === 'success' && 'Email Verified!'}
-          {status === 'error' && 'Verification Failed'}
+          {status === 'loading' && 'Authenticating Session'}
+          {status === 'success' && 'Security Clearance Confirmed'}
+          {status === 'error' && 'Access Authorization Failed'}
         </h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          {status === 'loading' && 'Please wait while we confirm your account activation...'}
-          {status === 'success' && 'Your DocSync account is active and ready to use.'}
-          {status === 'error' && 'We could not activate your account with this link.'}
+          {status === 'loading' && 'Validating secure session token...'}
+          {status === 'success' && 'Your credentials have been verified. Accessing secure workspace...'}
+          {status === 'error' && 'Unable to authorize session. The security token is invalid or has expired.'}
         </p>
       </div>
 
@@ -168,7 +168,7 @@ function VerifyContent() {
             </p>
             <Link href="/login" className="block w-full">
               <Button className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl bg-violet-950 py-6 text-sm font-semibold text-white shadow-md hover:bg-violet-900">
-                Log In to DocSync <ArrowRight className="h-4 w-4" />
+                Access Secure Workspace <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
           </div>

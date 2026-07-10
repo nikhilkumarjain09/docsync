@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { db } from '@docsync/db';
-import { signIn } from '@/auth';
+import { signIn, auth } from '@/auth';
 import bcrypt from 'bcryptjs';
 import { AuthError } from 'next-auth';
 import { z } from 'zod';
@@ -287,5 +287,31 @@ export async function verifyOtpAction(email: string, otp: string) {
   } catch (error) {
     console.error('[AUTH] OTP verification error:', error);
     return { error: 'Something went wrong during code verification.' };
+  }
+}
+
+/**
+ * Updates the user's profile display name in the database.
+ */
+export async function updateProfileAction(name: string) {
+  const session = await auth();
+  if (!session?.user?.email) {
+    return { error: 'Unauthorized. Please sign in.' };
+  }
+
+  const cleanName = name.trim();
+  if (!cleanName) {
+    return { error: 'Profile display name cannot be blank.' };
+  }
+
+  try {
+    await db.user.update({
+      where: { email: session.user.email },
+      data: { name: cleanName },
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('[AUTH] Update profile error:', error);
+    return { error: 'Failed to update profile name.' };
   }
 }
