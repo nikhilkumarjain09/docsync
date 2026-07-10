@@ -33,13 +33,31 @@ export function SettingsDialog({ open, onOpenChange, defaultTab = 'profile' }: S
   const { theme: currentTheme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = React.useState<TabType>(defaultTab);
   const [name, setName] = React.useState('');
+  const [avatar, setAvatar] = React.useState('');
   const [isSaving, setIsSaving] = React.useState(false);
+
+  // Mock states for extra profile options
+  const [jobTitle, setJobTitle] = React.useState('Product Manager');
+  const [department, setDepartment] = React.useState('Engineering');
+  const [bio, setBio] = React.useState('Collaborating on document syncing.');
+
+  const AVATAR_TEMPLATES = [
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&h=100&q=80',
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&h=100&q=80',
+    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&h=100&q=80',
+    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&h=100&q=80',
+    'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=100&h=100&q=80',
+    'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=100&h=100&q=80',
+    'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=100&h=100&q=80',
+    'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=100&h=100&q=80',
+  ];
 
   // Sync state with open transitions
   React.useEffect(() => {
     if (open) {
       setActiveTab(defaultTab);
       setName(session?.user?.name || '');
+      setAvatar(session?.user?.image || '');
     }
   }, [open, defaultTab, session]);
 
@@ -52,13 +70,13 @@ export function SettingsDialog({ open, onOpenChange, defaultTab = 'profile' }: S
 
     setIsSaving(true);
     try {
-      const res = await updateProfileAction(name);
+      const res = await updateProfileAction(name, avatar);
       if (res.success) {
-        // Trigger NextAuth update so client session reflects name change
-        await update({ name });
-        toast.success('Your profile display name has been updated.');
+        // Trigger NextAuth update so client session reflects name & image change
+        await update({ name, image: avatar });
+        toast.success('Your profile details have been updated.');
       } else {
-        toast.error(res.error || 'Failed to update profile name.');
+        toast.error(res.error || 'Failed to update profile details.');
       }
     } catch {
       toast.error('An unexpected network error occurred.');
@@ -76,15 +94,15 @@ export function SettingsDialog({ open, onOpenChange, defaultTab = 'profile' }: S
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[720px] p-0 overflow-hidden flex flex-col md:flex-row h-[480px]">
+      <DialogContent className="max-w-[760px] p-0 overflow-hidden flex flex-col md:flex-row h-[520px]">
         {/* Sidebar Nav */}
-        <div className="w-full md:w-[220px] bg-muted/20 border-b md:border-b-0 md:border-r border-border p-4 flex flex-col justify-between shrink-0">
+        <div className="w-full md:w-[200px] bg-muted/20 border-b md:border-b-0 md:border-r border-border p-4 flex flex-col justify-between shrink-0">
           <div className="space-y-4">
             <div>
-              <h3 className="font-bold text-sm tracking-tight px-2">Workspace Settings</h3>
-              <p className="text-muted-foreground text-[10px] px-2">Manage configurations & profile</p>
+              <h3 className="font-bold text-xs tracking-tight px-2">Account Workspace</h3>
+              <p className="text-muted-foreground text-[9px] px-2">Manage settings & profile</p>
             </div>
-            <nav className="flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-x-visible">
+            <nav className="flex flex-row md:flex-col gap-0.5 overflow-x-auto md:overflow-x-visible">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -92,7 +110,7 @@ export function SettingsDialog({ open, onOpenChange, defaultTab = 'profile' }: S
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap transition-all ${
                       isActive
                         ? 'bg-primary text-primary-foreground shadow-xs'
                         : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
@@ -105,78 +123,136 @@ export function SettingsDialog({ open, onOpenChange, defaultTab = 'profile' }: S
               })}
             </nav>
           </div>
-
-          {/* Social info inside settings sidebar */}
-          <div className="hidden md:block pt-4 border-t border-border/50 text-[10px] text-muted-foreground/60 space-y-1">
-            <div className="font-bold text-muted-foreground/80">Developer Profile</div>
-            <div>Nikhil Jain</div>
-            <div className="flex items-center gap-2 pt-0.5">
-              <a
-                href="https://github.com/nikhilkumarjain09"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-primary hover:underline flex items-center gap-1"
-              >
-                <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-                </svg>
-                <span>GitHub</span>
-              </a>
-              <span>•</span>
-              <a
-                href="https://www.linkedin.com/in/nikhil-kumar-jain-b05909278/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-primary hover:underline flex items-center gap-1"
-              >
-                <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
-                </svg>
-                <span>LinkedIn</span>
-              </a>
-            </div>
-          </div>
         </div>
 
         {/* Content Area */}
         <div className="flex-1 p-6 overflow-y-auto flex flex-col justify-between">
-          <div className="space-y-6">
+          <div className="space-y-5">
             {activeTab === 'profile' && (
               <div className="space-y-4">
                 <div>
-                  <h4 className="text-base font-bold tracking-tight">Identity & Profile</h4>
-                  <p className="text-muted-foreground text-xs leading-relaxed">
-                    Update your public-facing display details within the collaborative workspace environment.
+                  <h4 className="text-sm font-bold tracking-tight">Identity & Profile Details</h4>
+                  <p className="text-muted-foreground text-[11px] leading-relaxed">
+                    Update your public avatar and collaborator details within the enterprise sync workspace.
                   </p>
                 </div>
 
                 <form onSubmit={handleProfileSave} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
-                      Registered Email (Read-Only)
+                  {/* Avatar Picker & Preview */}
+                  <div className="space-y-2">
+                    <label className="text-muted-foreground text-[9px] font-bold tracking-wider uppercase">
+                      Profile Picture
                     </label>
-                    <Input
-                      value={session?.user?.email || ''}
-                      disabled
-                      className="bg-muted/40 opacity-75 font-mono text-xs"
-                    />
+                    <div className="flex items-center gap-4">
+                      <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border border-border bg-muted">
+                        {avatar ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={avatar} alt="Profile Avatar" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center font-bold text-muted-foreground text-sm uppercase">
+                            {name ? name.substring(0, 2) : 'U'}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-[10px] text-muted-foreground mb-1.5">Select a pre-configured enterprise avatar:</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {AVATAR_TEMPLATES.map((imgUrl, i) => {
+                            const isSelected = avatar === imgUrl;
+                            return (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => setAvatar(imgUrl)}
+                                className={`relative h-7 w-7 rounded-full overflow-hidden border transition-all ${
+                                  isSelected 
+                                    ? 'border-primary ring-1 ring-primary scale-110 shadow-xs' 
+                                    : 'border-border/60 hover:scale-105'
+                                }`}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={imgUrl} alt={`Avatar option ${i + 1}`} className="h-full w-full object-cover" />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label htmlFor="settings-name" className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
-                      Display Name
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-muted-foreground text-[9px] font-bold tracking-wider uppercase">
+                        Registered Email (Read-Only)
+                      </label>
+                      <Input
+                        value={session?.user?.email || ''}
+                        disabled
+                        className="bg-muted/40 opacity-75 font-mono text-[11px] h-8"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label htmlFor="settings-name" className="text-muted-foreground text-[9px] font-bold tracking-wider uppercase">
+                        Display Name
+                      </label>
+                      <Input
+                        id="settings-name"
+                        placeholder="Nikhil Jain"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        disabled={isSaving}
+                        required
+                        className="text-[11px] h-8"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label htmlFor="settings-title" className="text-muted-foreground text-[9px] font-bold tracking-wider uppercase">
+                        Job Title
+                      </label>
+                      <Input
+                        id="settings-title"
+                        placeholder="Product Manager"
+                        value={jobTitle}
+                        onChange={(e) => setJobTitle(e.target.value)}
+                        disabled={isSaving}
+                        className="text-[11px] h-8"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label htmlFor="settings-dept" className="text-muted-foreground text-[9px] font-bold tracking-wider uppercase">
+                        Department
+                      </label>
+                      <Input
+                        id="settings-dept"
+                        placeholder="Engineering"
+                        value={department}
+                        onChange={(e) => setDepartment(e.target.value)}
+                        disabled={isSaving}
+                        className="text-[11px] h-8"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label htmlFor="settings-bio" className="text-muted-foreground text-[9px] font-bold tracking-wider uppercase">
+                      Biography
                     </label>
-                    <Input
-                      id="settings-name"
-                      placeholder="Nikhil Jain"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
+                    <textarea
+                      id="settings-bio"
+                      placeholder="Collaborating on documents..."
+                      value={bio}
+                      onChange={(e) => setBio(e.target.value)}
                       disabled={isSaving}
-                      required
+                      className="border-input bg-background focus:border-primary focus:ring-primary/20 w-full rounded-md border p-2 text-[11px] h-14 outline-none focus:ring-1 resize-none"
                     />
                   </div>
 
-                  <Button type="submit" disabled={isSaving} className="gap-2 font-semibold shadow-xs">
+                  <Button type="submit" disabled={isSaving} className="gap-2 font-semibold shadow-xs text-xs h-8 px-3 mt-1">
                     {isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                     {isSaving ? 'Updating Profile...' : 'Save Configuration'}
                   </Button>

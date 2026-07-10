@@ -324,6 +324,19 @@ ul[data-type='taskList'] input[type='checkbox'] {
 }
 
 /* 6. Drag Handle & Plus Gutter Positioning */
+#editor-gutter-controls {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+  transform: translate3d(-48px, 2px, 0); /* Offset horizontally to render in left gutter next to text */
+}
+
+#editor-gutter-controls.global-drag-handle-active,
+#editor-gutter-controls:hover {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .global-drag-handle {
   display: flex;
   align-items: center;
@@ -332,10 +345,7 @@ ul[data-type='taskList'] input[type='checkbox'] {
   height: 1.25rem;
   border-radius: 4px;
   color: var(--muted-foreground);
-  opacity: 0;
-  transition:
-    opacity 0.2s ease,
-    background-color 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
   cursor: grab;
 }
 
@@ -346,12 +356,6 @@ ul[data-type='taskList'] input[type='checkbox'] {
 .global-drag-handle:hover {
   background-color: var(--muted);
   color: var(--foreground);
-}
-
-/* Show drag handle on block container hover */
-.ProseMirror-focused .global-drag-handle-active,
-.ProseMirror:hover .global-drag-handle-active {
-  opacity: 1;
 }
 
 /* 7. Tables, Images, and custom block nodes styling */

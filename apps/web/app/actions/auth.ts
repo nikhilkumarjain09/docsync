@@ -293,7 +293,7 @@ export async function verifyOtpAction(email: string, otp: string) {
 /**
  * Updates the user's profile display name in the database.
  */
-export async function updateProfileAction(name: string) {
+export async function updateProfileAction(name: string, image?: string) {
   const session = await auth();
   if (!session?.user?.email) {
     return { error: 'Unauthorized. Please sign in.' };
@@ -307,11 +307,14 @@ export async function updateProfileAction(name: string) {
   try {
     await db.user.update({
       where: { email: session.user.email },
-      data: { name: cleanName },
+      data: { 
+        name: cleanName,
+        ...(image !== undefined && { image })
+      },
     });
     return { success: true };
   } catch (error) {
     console.error('[AUTH] Update profile error:', error);
-    return { error: 'Failed to update profile name.' };
+    return { error: 'Failed to update profile details.' };
   }
 }

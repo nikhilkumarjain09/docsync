@@ -13,6 +13,13 @@ import { ConfirmDialog } from '@/components/shell/confirm-dialog';
 import { CheckpointLabelDialog } from '@/components/shell/checkpoint-label-dialog';
 import { ShareDialog } from '@/components/shell/share-dialog';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -294,6 +301,7 @@ function EditorWorkspaceContent({
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [previewingSnapshot, setPreviewingSnapshot] = useState<Snapshot | null>(null);
   const [previewText, setPreviewText] = useState('');
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   // Tab panels
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -469,6 +477,10 @@ function EditorWorkspaceContent({
       extensions: [
         StarterKit.configure({
           undoRedo: false, // Collaboration handles undo/redo
+          dropcursor: {
+            color: 'var(--primary)',
+            width: 2,
+          },
         }),
         Collaboration.configure({
           document: stableDoc || undefined,
@@ -1156,6 +1168,7 @@ function EditorWorkspaceContent({
   const handlePreviewSnapshot = async (snapshot: Snapshot) => {
     setPreviewingSnapshot(snapshot);
     setPreviewText('Loading version details...');
+    setIsPreviewOpen(true);
 
     try {
       const res = await fetch(`/api/documents/${documentId}/snapshots/${snapshot.id}`);
@@ -1317,8 +1330,6 @@ function EditorWorkspaceContent({
             <div>
               <h1 className="text-lg font-bold tracking-tight">DocSync Editor Workspace</h1>
               <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <span className="font-mono select-all">ID: {documentId}</span>
-                <span>•</span>
                 <div className="flex items-center gap-1">
                   {saveStatus === 'saving' && (
                     <>
@@ -1447,7 +1458,7 @@ function EditorWorkspaceContent({
             {/* Embedded Drag Handle and Plus gutter controls */}
             {!isViewer && editor && (
               <div
-                className="pointer-events-none absolute top-0 left-3 z-20 flex flex-col gap-0.5 opacity-0 transition-opacity hover:opacity-100"
+                className="absolute z-20 flex flex-row items-center gap-1"
                 id="editor-gutter-controls"
               >
                 <button
@@ -2172,6 +2183,46 @@ function EditorWorkspaceContent({
         confirmLabel="Restore"
         onConfirm={executeRestoreSnapshot}
       />
+
+      {/* Bigger scrollable document-prose Snapshot Preview Dialog */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="max-w-4xl w-[90vw] h-[80vh] flex flex-col p-6 rounded-2xl border border-border bg-card">
+          <DialogHeader className="border-b border-border/50 pb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="text-xl font-bold">Version History Snapshot Preview</DialogTitle>
+                {previewingSnapshot && (
+                  <DialogDescription className="text-xs text-muted-foreground mt-1">
+                    Label: <span className="font-semibold text-foreground">{previewingSnapshot.label}</span> • Saved on {new Date(previewingSnapshot.createdAt).toLocaleString()} by {previewingSnapshot.creator.name || previewingSnapshot.creator.email}
+                  </DialogDescription>
+                )}
+              </div>
+              {previewingSnapshot && !isViewer && (
+                <Button
+                  onClick={async () => {
+                    await handleRestoreSnapshotTrigger(previewingSnapshot);
+                    setIsPreviewOpen(false);
+                  }}
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5"
+                >
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin-once" /> Restore This Version
+                </Button>
+              )}
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto py-6 px-4 bg-muted/10 rounded-xl border border-border/30 mt-4">
+            <div className="mx-auto max-w-3xl">
+              {/* Styled like document prose */}
+              <div 
+                className="prose dark:prose-invert max-w-none text-base leading-relaxed break-words"
+                dangerouslySetInnerHTML={{ __html: previewText }} 
+              />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -2290,34 +2341,7 @@ function SidebarContent({
           </div>
         )}
 
-        {previewingSnapshot && (
-          <div className="border-primary/20 bg-primary/5 space-y-3 rounded-xl border p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-primary text-[10px] font-bold uppercase">Snapshot Preview</span>
-              <button
-                onClick={() => setPreviewingSnapshot(null)}
-                className="text-muted-foreground hover:text-foreground text-xs"
-              >
-                Close
-              </button>
-            </div>
-            <div className="truncate text-xs font-bold">{previewingSnapshot.label}</div>
-            <textarea
-              readOnly
-              value={previewText}
-              className="border-border bg-background/60 h-32 w-full resize-none rounded-lg border p-2.5 font-sans text-[11px] outline-none"
-            />
-            {!isViewer && (
-              <Button
-                onClick={() => handleRestoreSnapshotTrigger(previewingSnapshot)}
-                className="w-full py-1.5 text-xs"
-                size="sm"
-              >
-                Restore this version
-              </Button>
-            )}
-          </div>
-        )}
+
 
         {/* Snapshot listing timeline */}
         <div
