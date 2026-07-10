@@ -253,7 +253,10 @@ async function sendMail({ to, subject, html }: SendMailParams) {
  * Public method to send verification emails
  */
 export async function sendVerificationEmail(email: string, token: string) {
-  const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+  let baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+  if (!process.env.NEXTAUTH_URL && process.env.VERCEL_URL) {
+    baseUrl = `https://${process.env.VERCEL_URL}`;
+  }
   const verifyUrl = `${baseUrl}/verify?token=${token}`;
   const html = getVerificationHtml(email, verifyUrl);
 
