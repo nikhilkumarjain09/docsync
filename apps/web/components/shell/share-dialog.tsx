@@ -218,16 +218,19 @@ export function ShareDialog({
           </form>
         )}
 
-        <div className="space-y-2 pt-2">
+        <div className="w-full min-w-0 space-y-2 pt-2">
           <span className="text-muted-foreground block text-[10px] font-bold tracking-wider uppercase">
             Collaborators
           </span>
 
-          <div className="max-h-[180px] scrollbar-thin space-y-2 overflow-x-hidden overflow-y-auto pr-1">
+          <div className="max-h-[180px] w-full min-w-0 scrollbar-thin space-y-2 overflow-x-hidden overflow-y-auto pr-1">
             {loadingList ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex items-center justify-between gap-3 py-1">
+                  <div
+                    key={i}
+                    className="flex w-full min-w-0 items-center justify-between gap-3 py-1"
+                  >
                     <div className="flex min-w-0 flex-1 items-center gap-2">
                       <div className="bg-muted-foreground/10 h-8 w-8 shrink-0 animate-pulse rounded-full" />
                       <div className="min-w-0 flex-1 space-y-1.5">
@@ -250,7 +253,7 @@ export function ShareDialog({
                 return (
                   <div
                     key={col.userId}
-                    className="flex items-center justify-between gap-3 py-1 text-xs"
+                    className="flex w-full min-w-0 items-center justify-between gap-3 py-1 text-xs"
                   >
                     <div className="flex min-w-0 flex-1 items-center gap-2">
                       <Avatar className="h-8 w-8 shrink-0">
@@ -319,11 +322,11 @@ export function ShareDialog({
           </div>
         </div>
 
-        <div className="border-border/50 space-y-2 border-t pt-4">
+        <div className="border-border/50 w-full min-w-0 space-y-2 border-t pt-4">
           <span className="text-muted-foreground block text-[10px] font-bold tracking-wider uppercase">
             Share Link
           </span>
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row">
             <div className="bg-muted text-muted-foreground border-border/30 w-full min-w-0 truncate rounded-lg border px-3 py-2 font-mono text-[11px] select-all">
               {documentId
                 ? `${window.location.origin}/documents/${documentId}`
