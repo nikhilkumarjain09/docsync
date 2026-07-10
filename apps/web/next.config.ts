@@ -5,7 +5,8 @@ const nextConfig: NextConfig = {
   /* config options here */
   serverExternalPackages: ['yjs', 'y-prosemirror'],
   outputFileTracingIncludes: {
-    '/**/*': ['../../packages/db/dist/generated/client/libquery_engine-*.node'],
+    '/*': ['../../packages/db/dist/generated/client/libquery_engine-*.node'],
+    '/api/**/*': ['../../packages/db/dist/generated/client/libquery_engine-*.node'],
   },
   turbopack: {
     resolveAlias: {
