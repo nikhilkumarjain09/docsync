@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   test:
@@ -45,12 +45,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma Client
-        run: pnpm --filter @docsync/db prisma generate
+        run: pnpm --filter @docsync/db run db:generate
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/docsync
 
       - name: Push database schema
-        run: pnpm --filter @docsync/db prisma db push
+        run: pnpm --filter @docsync/db run db:push
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/docsync
 

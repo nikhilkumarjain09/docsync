@@ -223,7 +223,7 @@ export function ShareDialog({
             Collaborators
           </span>
 
-          <div className="max-h-[180px] w-full min-w-0 scrollbar-thin space-y-2 overflow-x-hidden overflow-y-auto pr-1">
+          <div className="max-h-[180px] min-h-[130px] w-full min-w-0 scrollbar-thin space-y-2 overflow-x-hidden overflow-y-auto pr-1">
             {loadingList ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (

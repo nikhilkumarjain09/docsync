@@ -2504,7 +2504,7 @@ function EditorWorkspaceContent({
 
               {/* AI Writing Assist Diff Suggestion Popover */}
               {showAiAssist && (
-                <div className="border-border bg-background/95 animate-in fade-in slide-in-from-top-2 absolute top-12 left-1/2 z-30 w-96 -translate-x-1/2 space-y-3 rounded-xl border p-4 shadow-2xl backdrop-blur-md duration-150">
+                <div className="border-border bg-background/95 animate-in fade-in slide-in-from-top-2 absolute top-12 left-1/2 z-30 w-[90vw] max-w-sm -translate-x-1/2 space-y-3 rounded-xl border p-4 shadow-2xl backdrop-blur-md duration-150">
                   <div className="border-border/30 flex items-center justify-between border-b pb-2">
                     <span className="text-primary flex items-center gap-1 text-xs font-bold">
                       <Wand2 className="h-3.5 w-3.5" /> AI Paragraph Assist
@@ -2562,7 +2562,9 @@ function EditorWorkspaceContent({
                           <span className="block text-[9px] font-bold tracking-wider text-emerald-600 uppercase">
                             AI Improved text
                           </span>
-                          <p className="break-words">{aiAssistResult.improvedText}</p>
+                          <p className="line-clamp-3 overflow-hidden break-words text-ellipsis">
+                            {aiAssistResult.improvedText}
+                          </p>
                         </div>
                       </div>
                       <div className="flex gap-2">
