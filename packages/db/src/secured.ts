@@ -69,6 +69,14 @@ export async function getDocumentsForUserSecured(userId: string, includeDeleted 
         },
         deletedAt: includeDeleted ? undefined : null,
       },
+      include: {
+        owner: {
+          select: { name: true, email: true },
+        },
+        collaborators: {
+          select: { userId: true, role: true },
+        },
+      },
       orderBy: {
         updatedAt: 'desc',
       },
