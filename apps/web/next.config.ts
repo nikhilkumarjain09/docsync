@@ -1,5 +1,6 @@
 import type { NextConfig } from 'next';
 import path from 'path';
+import withBundleAnalyzer from '@next/bundle-analyzer';
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -21,4 +22,7 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+const wrappedConfig =
+  process.env.ANALYZE === 'true' ? withBundleAnalyzer({ enabled: true })(nextConfig) : nextConfig;
+
+export default wrappedConfig;

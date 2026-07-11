@@ -1,9 +1,10 @@
 'use client';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import React, { use, useState, useEffect, useRef } from 'react';
+import React, { use, useState, useEffect, useRef, useCallback } from 'react';
 import { useYDoc } from '@/hooks/use-ydoc';
 import { Button } from '@/components/ui/button';
+import { BubbleMenu } from '@tiptap/react/menus';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -33,32 +34,19 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Tiptap core & Starter Kit
-import { useEditor, EditorContent } from '@tiptap/react';
-import { BubbleMenu } from '@tiptap/react/menus';
-import StarterKit from '@tiptap/starter-kit';
-import Collaboration from '@tiptap/extension-collaboration';
-import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
+import dynamic from 'next/dynamic';
 
-// Tiptap Notion-Style extensions
-import Placeholder from '@tiptap/extension-placeholder';
-import TaskList from '@tiptap/extension-task-list';
-import TaskItem from '@tiptap/extension-task-item';
-import Highlight from '@tiptap/extension-highlight';
-import LinkExtension from '@tiptap/extension-link';
-import GlobalDragHandle from 'tiptap-extension-global-drag-handle';
-
-// New Tiptap extensions
-import Underline from '@tiptap/extension-underline';
-import TextAlign from '@tiptap/extension-text-align';
-import { TextStyle } from '@tiptap/extension-text-style';
-import Color from '@tiptap/extension-color';
-import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table';
-import Image from '@tiptap/extension-image';
-
-// Custom toggle and callout blocks
-import { ToggleBlock, ToggleHeader, ToggleContent } from '@/lib/editor/toggle-block';
-import { CalloutBlock } from '@/lib/editor/callout-block';
+const CollaborativeEditor = dynamic(() => import('@/components/editor/collaborative-editor'), {
+  ssr: false,
+  loading: () => (
+    <div className="space-y-4 py-8">
+      <Skeleton className="h-10 w-1/4" />
+      <Skeleton className="h-6 w-full" />
+      <Skeleton className="h-6 w-full" />
+      <Skeleton className="h-6 w-3/4" />
+    </div>
+  ),
+});
 
 // Icons
 import {
@@ -553,108 +541,16 @@ function EditorWorkspaceContent({
     };
   }, [stableAwareness, userId, userName]);
 
-  // ─── Tiptap Editor Core Instantiation ─────────────────────────────────
-  /* eslint-disable react-hooks/refs */
-  const editor = useEditor(
-    {
-      extensions: [
-        StarterKit.configure({
-          undoRedo: false, // Collaboration handles undo/redo
-          dropcursor: {
-            color: 'var(--primary)',
-            width: 2,
-          },
-        }),
-        Collaboration.configure({
-          document: stableDoc || undefined,
-          fragment: stableContent || undefined,
-        }),
-        CollaborationCursor.configure({
-          provider:
-            stableProvider && stableAwareness
-              ? Object.assign(Object.create(stableProvider), { awareness: stableAwareness })
-              : ({ awareness: {}, doc: {} } as unknown as Record<string, unknown>),
-          user: {
-            name: userName,
-            color: getUserColor(userId),
-          },
-        }),
-        Placeholder.configure({
-          placeholder: "Type '/' for commands...",
-        }),
-        TaskList,
-        TaskItem.configure({
-          nested: true,
-        }),
-        Highlight.configure({
-          multicolor: true,
-        }),
-        LinkExtension.configure({
-          openOnClick: false,
-        }),
-        GlobalDragHandle.configure({
-          dragHandleWidth: 36,
-          dragHandleSelector: '#editor-gutter-controls',
-        }),
-        // Custom Collapsible nodes
-        ToggleBlock,
-        ToggleHeader,
-        ToggleContent,
-        // Formatting and layout extensions
-        Underline,
-        TextAlign.configure({
-          types: ['heading', 'paragraph'],
-        }),
-        TextStyle,
-        Color,
-        Table.configure({
-          resizable: true,
-        }),
-        TableRow,
-        TableHeader,
-        TableCell,
-        Image.configure({
-          allowBase64: true,
-        }),
-        CalloutBlock,
-      ],
-      editorProps: {
-        attributes: {
-          class:
-            'prose dark:prose-invert focus:outline-none min-h-[480px] w-full max-w-none text-base leading-relaxed',
-        },
-        // Click handler to toggle collapsed list states
-        handleClickOn(view, pos, node, nodePos, event) {
-          const target = event.target as HTMLElement;
-          if (target.classList.contains('toggle-chevron-indicator')) {
-            const transaction = view.state.tr;
-            const parentNode = view.state.doc.nodeAt(nodePos);
-            if (parentNode && parentNode.type.name === 'toggleBlock') {
-              const nextOpen = !parentNode.attrs.open;
-              view.dispatch(
-                transaction.setNodeMarkup(nodePos, undefined, {
-                  ...parentNode.attrs,
-                  open: nextOpen,
-                }),
-              );
-              return true;
-            }
-          }
-          return false;
-        },
-      },
-      immediatelyRender: false,
-    },
-    [doc, provider, content],
-  );
-  /* eslint-enable react-hooks/refs */
+  // ─── Tiptap Editor State ─────────────────────────────────
+  const [editor, setEditor] = useState<any>(null);
+  const handleEditorCreated = useCallback((editorInstance: any) => {
+    setEditor(editorInstance);
+  }, []);
+  const handleEditorDestroyed = useCallback(() => {
+    setEditor(null);
+  }, []);
 
-  // Sync edit permissions
   const isViewer = currentUserRole === 'VIEWER';
-  useEffect(() => {
-    if (!editor) return;
-    editor.setEditable(!isViewer && !isLocked);
-  }, [editor, isViewer, isLocked]);
 
   // Template loader logic
   useEffect(() => {
@@ -2680,7 +2576,18 @@ function EditorWorkspaceContent({
               )}
 
               {/* ProseMirror Editor Canvas */}
-              <EditorContent editor={editor} />
+              <CollaborativeEditor
+                stableDoc={stableDoc}
+                stableContent={stableContent}
+                stableProvider={stableProvider}
+                stableAwareness={stableAwareness}
+                userId={userId}
+                userName={userName}
+                isViewer={isViewer}
+                isLocked={isLocked}
+                onEditorCreated={handleEditorCreated}
+                onEditorDestroyed={handleEditorDestroyed}
+              />
             </div>
           </div>
 

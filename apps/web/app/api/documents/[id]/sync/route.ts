@@ -1,5 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
+
+export const dynamic = 'force-dynamic';
 import { db, runWithUserContext } from '@docsync/db';
 import {
   getDocumentRole,
@@ -8,10 +11,7 @@ import {
   MAX_UPDATE_BYTES,
 } from '@docsync/shared';
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   // ─── Auth check ────────────────────────────────────────────────────
   const session = await auth();
   if (!session?.user) {
@@ -34,7 +34,7 @@ export async function POST(
   if (contentLength > MAX_SYNC_PAYLOAD_BYTES) {
     return NextResponse.json(
       { error: `Payload too large. Maximum size is ${MAX_SYNC_PAYLOAD_BYTES} bytes.` },
-      { status: 413 }
+      { status: 413 },
     );
   }
 
@@ -51,7 +51,7 @@ export async function POST(
   if (!parseResult.success) {
     return NextResponse.json(
       { error: 'Invalid payload', details: parseResult.error.flatten().fieldErrors },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -71,7 +71,9 @@ export async function POST(
 
           // Layer 4: Individual update binary size check
           if (updateBytes.length > MAX_UPDATE_BYTES) {
-            console.warn(`[SyncRoute] Rejected oversized update (${updateBytes.length}B) from ${userId}`);
+            console.warn(
+              `[SyncRoute] Rejected oversized update (${updateBytes.length}B) from ${userId}`,
+            );
             continue; // Skip this update, process remaining
           }
 
@@ -84,7 +86,9 @@ export async function POST(
           });
         }
       });
-      console.log(`[SyncRoute] Processed ${updates.length} updates pushed by ${userId} for document: ${documentId}`);
+      console.log(
+        `[SyncRoute] Processed ${updates.length} updates pushed by ${userId} for document: ${documentId}`,
+      );
     }
 
     // ─── Retrieve new updates (Pull) ─────────────────────────────

@@ -66,6 +66,7 @@ model DocumentCollaborator {
   updatedAt  DateTime @updatedAt
 
   @@id([documentId, userId])
+  @@index([userId])
 }
 
 model DocumentUpdateLog {

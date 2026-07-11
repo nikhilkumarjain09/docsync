@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
+
+export const dynamic = 'force-dynamic';
 import { renameDocumentSecured, softDeleteDocumentSecured, getDocumentSecured } from '@docsync/db';
 import { z } from 'zod';
 

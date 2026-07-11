@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
+
+export const dynamic = 'force-dynamic';
 import { db, runWithUserContext } from '@docsync/db';
 import { getDocumentRole, SnapshotCreateSchema } from '@docsync/shared';
 import * as Y from 'yjs';

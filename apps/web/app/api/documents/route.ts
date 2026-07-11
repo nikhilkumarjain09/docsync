@@ -1,5 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
+
+export const dynamic = 'force-dynamic';
 import { getDocumentsForUserSecured, createDocumentSecured } from '@docsync/db';
 import { z } from 'zod';
 
@@ -46,7 +49,7 @@ export async function POST(request: NextRequest) {
   if (!parseResult.success) {
     return NextResponse.json(
       { error: 'Invalid payload', details: parseResult.error.flatten().fieldErrors },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
