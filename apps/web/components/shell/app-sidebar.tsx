@@ -428,21 +428,26 @@ export function AppSidebar({
         >
           <Plus className="h-4 w-4" /> New Document
         </Button>
-        <Button
-          variant="outline"
-          onClick={() => setSearchOpen(true)}
-          className="border-border/50 bg-background/50 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground h-9 w-full cursor-pointer justify-start gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium shadow-xs"
-        >
-          <Search className="text-muted-foreground h-4 w-4 shrink-0" />
-          <span className="flex-1 text-left">Search Documents</span>
-          <kbd className="bg-muted text-muted-foreground pointer-events-none rounded border px-1.5 font-mono text-[9px] font-medium select-none">
-            ⌘K
-          </kbd>
-        </Button>
       </div>
 
       {/* Main navigation links */}
       <div className="flex-1 space-y-4 overflow-y-auto px-2 py-1">
+        {/* SEARCH ACTION */}
+        <div className="space-y-0.5">
+          <div
+            onClick={() => setSearchOpen(true)}
+            className="group hover:bg-sidebar-accent/50 text-foreground flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 text-xs transition-all"
+          >
+            <span className="flex items-center gap-2 truncate font-medium">
+              <Search className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+              <span>Search Documents</span>
+            </span>
+            <kbd className="bg-muted text-muted-foreground pointer-events-none rounded border px-1.5 font-mono text-[9px] font-medium select-none">
+              ⌘K
+            </kbd>
+          </div>
+        </div>
+
         {/* FAVORITES */}
         <div className="space-y-1">
           <button

@@ -10,28 +10,30 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const [isCollapsed, setIsCollapsed] = React.useState<boolean>(false);
-  const [width, setWidth] = React.useState<number>(240);
+  const [width, setWidth] = React.useState<number>(280);
   const [isResizing, setIsResizing] = React.useState<boolean>(false);
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
     // Load initial states from localStorage safely on mount
-    const savedCollapsed = localStorage.getItem('sidebar_collapsed_state');
-    if (savedCollapsed !== null) {
-      setIsCollapsed(savedCollapsed === 'true');
-    }
-    const savedWidth = localStorage.getItem('sidebar_width');
-    if (savedWidth !== null) {
-      const parsed = parseInt(savedWidth, 10);
-      if (!isNaN(parsed) && parsed >= 180 && parsed <= 450) {
-        setWidth(parsed);
+    Promise.resolve().then(() => {
+      const savedCollapsed = localStorage.getItem('sidebar_collapsed_state');
+      if (savedCollapsed !== null) {
+        setIsCollapsed(savedCollapsed === 'true');
       }
-    }
-    setMounted(true);
+      const savedWidth = localStorage.getItem('sidebar_width');
+      if (savedWidth !== null) {
+        const parsed = parseInt(savedWidth, 10);
+        if (!isNaN(parsed) && parsed >= 180 && parsed <= 450) {
+          setWidth(parsed);
+        }
+      }
+      setMounted(true);
+    });
   }, []);
 
   const handleCollapseToggle = React.useCallback(() => {
-    setIsCollapsed(prev => {
+    setIsCollapsed((prev) => {
       const next = !prev;
       localStorage.setItem('sidebar_collapsed_state', String(next));
       return next;
@@ -41,7 +43,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   if (!mounted) {
     return (
       <div className="bg-background flex h-screen w-screen overflow-hidden">
-        <div className="w-60 border-r bg-sidebar" />
+        <div className="bg-sidebar w-[280px] border-r" />
         <main className="relative h-full flex-1 overflow-hidden">{children}</main>
       </div>
     );
@@ -62,10 +64,10 @@ export function AppLayout({ children }: AppLayoutProps) {
         {isCollapsed && (
           <button
             onClick={handleCollapseToggle}
-            className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-border bg-background/80 fixed top-4 left-4 z-40 flex h-8 w-8 items-center justify-center rounded-lg border shadow-xs backdrop-blur-xs transition-all duration-200 active:scale-95 cursor-pointer"
+            className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-border bg-background/80 fixed top-4 left-4 z-40 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border shadow-xs backdrop-blur-xs transition-all duration-200 active:scale-95"
             title="Expand sidebar"
           >
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            <ChevronRight className="text-muted-foreground h-4 w-4" />
           </button>
         )}
         <div className="h-full w-full">{children}</div>
