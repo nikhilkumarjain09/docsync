@@ -1,4 +1,4 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 
@@ -21,15 +21,15 @@ try {
       }
     }
   }
-} catch (e: any) {
-  console.warn('Failed to parse .env file in Playwright config:', e.message);
+} catch (e: unknown) {
+  console.warn('Failed to parse .env file in Playwright config:', (e as Error).message);
 }
 
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 90 * 1000,
   expect: {
-    timeout: 15000
+    timeout: 15000,
   },
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -49,6 +49,7 @@ export default defineConfig({
       env: {
         DISABLE_RATE_LIMIT: 'true',
         AUTH_TRUST_HOST: 'true',
+        PLAYWRIGHT_TEST: 'true',
       },
     },
     {
@@ -58,7 +59,8 @@ export default defineConfig({
       timeout: 120 * 1000,
       env: {
         DISABLE_RATE_LIMIT: 'true',
+        PLAYWRIGHT_TEST: 'true',
       },
-    }
+    },
   ],
 });

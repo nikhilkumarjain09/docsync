@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle2, AlertCircle, Mail, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
+import { signIn } from 'next-auth/react';
 
 function VerifyContent() {
   const searchParams = useSearchParams();
@@ -37,9 +38,25 @@ function VerifyContent() {
         const res = await verifyTokenAction(token);
         if (res.success) {
           setStatus('success');
-          setTimeout(() => {
-            router.push('/login');
-          }, 3000);
+          if (res.loginToken && res.email) {
+            // Auto-login the verified user
+            const signInRes = await signIn('credentials', {
+              email: res.email,
+              tokenLogin: 'true',
+              secret: res.loginToken,
+              redirect: false,
+              callbackUrl: '/',
+            });
+            if (signInRes?.ok) {
+              window.location.href = '/';
+            } else {
+              router.push('/login');
+            }
+          } else {
+            setTimeout(() => {
+              router.push('/login');
+            }, 3000);
+          }
         } else {
           setStatus('error');
           setErrorMessage(res.error || 'Verification failed.');

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { logIn, signUp, resendVerification, verifyOtpAction } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { signIn } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileText,
@@ -162,13 +163,36 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
         if (res.success) {
           setOtpSuccess(true);
           setOtpDigits(['', '', '', '', '', '']);
-          setTimeout(() => {
-            setPendingVerificationEmail(null);
-            setOtpSuccess(false);
-            setIsSignup(false);
-            window.history.pushState(null, '', '/login');
-            toast.success('Email verified successfully! Please log in.');
-          }, 1500);
+
+          if (res.loginToken) {
+            toast.success('Verification successful! Accessing workspace...');
+            const signInRes = await signIn('credentials', {
+              email: pendingVerificationEmail,
+              tokenLogin: 'true',
+              secret: res.loginToken,
+              redirect: false,
+              callbackUrl: '/',
+            });
+            if (signInRes?.ok) {
+              window.location.href = '/';
+            } else {
+              toast.error('Automatic sign-in failed. Please log in manually.');
+              setTimeout(() => {
+                setPendingVerificationEmail(null);
+                setOtpSuccess(false);
+                setIsSignup(false);
+                window.history.pushState(null, '', '/login');
+              }, 1500);
+            }
+          } else {
+            setTimeout(() => {
+              setPendingVerificationEmail(null);
+              setOtpSuccess(false);
+              setIsSignup(false);
+              window.history.pushState(null, '', '/login');
+              toast.success('Email verified successfully! Please log in.');
+            }, 1500);
+          }
         } else {
           setOtpError(res.error || 'Failed to verify code.');
           setOtpDigits(['', '', '', '', '', '']);
@@ -455,10 +479,10 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
 
         <Button
           type="submit"
-          disabled={loginIsPending || isNavigating}
+          disabled={loginIsPending || isNavigating || loginState?.success}
           className="w-full rounded-xl bg-violet-950 py-6 text-sm font-semibold text-white shadow-md transition-all duration-150 hover:bg-violet-900 active:scale-[0.99]"
         >
-          {loginIsPending || isNavigating ? (
+          {loginIsPending || isNavigating || loginState?.success ? (
             <span className="flex items-center justify-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
               Signing In...
@@ -542,7 +566,7 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
           </label>
           <div className="relative">
             <input
-              id="signup-password"
+              id="password"
               name="password"
               type={signupPasswordVisible ? 'text' : 'password'}
               placeholder="••••••••"

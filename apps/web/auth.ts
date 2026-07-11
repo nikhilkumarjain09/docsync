@@ -20,6 +20,50 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Credentials({
       async authorize(credentials) {
         console.log('[AUTH DEBUG] authorize callback received credentials:', credentials);
+
+        // Check if this is a token-based passwordless login from OTP/verification flow
+        if (
+          credentials &&
+          credentials.tokenLogin === 'true' &&
+          credentials.email &&
+          credentials.secret
+        ) {
+          const email = credentials.email as string;
+          const secret = credentials.secret as string;
+
+          // Verify the temporary login token in the database
+          const dbToken = await db.verificationToken.findFirst({
+            where: {
+              email,
+              token: `login:${secret}`,
+              expires: { gt: new Date() },
+            },
+          });
+
+          if (!dbToken) {
+            console.log('[AUTH DEBUG] token login failed: invalid or expired token');
+            return null;
+          }
+
+          // Update expiration to 15 seconds from now to prevent reuse but allow multiple rapid requests in the sign-in flow
+          await db.verificationToken.update({
+            where: { token: dbToken.token },
+            data: { expires: new Date(Date.now() + 15 * 1000) },
+          });
+
+          const user = await db.user.findUnique({ where: { email } });
+          if (user) {
+            console.log('[AUTH DEBUG] token login successful for user:', user.email);
+            return {
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              image: user.image,
+            };
+          }
+          return null;
+        }
+
         const parsedCredentials = z
           .object({ email: z.string().email(), password: z.string().min(6) })
           .safeParse(credentials);

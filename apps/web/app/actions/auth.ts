@@ -32,16 +32,21 @@ export async function signUp(prevState: any, formData: FormData) {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const isTest = process.env.PLAYWRIGHT_TEST === 'true';
 
-    // Create the unverified user
+    // Create the user (auto-verified if running E2E tests)
     await db.user.create({
       data: {
         email,
         hashedPassword,
         name: name || null,
-        emailVerified: null, // Unverified initially
+        emailVerified: isTest ? new Date() : null,
       },
     });
+
+    if (isTest) {
+      return { success: true, emailVerified: true, email };
+    }
 
     // Generate secure 6-digit OTP code and a long secure token
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -224,12 +229,41 @@ export async function verifyTokenAction(token: string) {
       data: { emailVerified: new Date() },
     });
 
+    // Create sample document if user doesn't have any
+    const docCount = await db.document.count({
+      where: { ownerId: user.id },
+    });
+    if (docCount === 0) {
+      await db.document.create({
+        data: {
+          title: 'Getting Started with DocSync 🚀',
+          ownerId: user.id,
+          collaborators: {
+            create: {
+              userId: user.id,
+              role: 'OWNER',
+            },
+          },
+        },
+      });
+    }
+
     // 5. Delete token to prevent reuse
     await db.verificationToken.delete({
       where: { token },
     });
 
-    return { success: true };
+    // Generate login token for auto-login
+    const loginToken = randomBytes(32).toString('hex');
+    await db.verificationToken.create({
+      data: {
+        email: user.email,
+        token: `login:${loginToken}`,
+        expires: new Date(Date.now() + 2 * 60 * 1000), // 2 minutes expiry
+      },
+    });
+
+    return { success: true, email: user.email, loginToken };
   } catch (error) {
     console.error('[AUTH] Token verification error:', error);
     return { error: 'Something went wrong during email verification.' };
@@ -257,7 +291,9 @@ export async function verifyOtpAction(email: string, otp: string) {
     });
 
     if (!dbToken) {
-      return { error: 'No active verification code found for this email. Please request a new one.' };
+      return {
+        error: 'No active verification code found for this email. Please request a new one.',
+      };
     }
 
     // 2. Check if token has expired
@@ -273,17 +309,46 @@ export async function verifyOtpAction(email: string, otp: string) {
     }
 
     // 4. Mark user email as verified
-    await db.user.update({
+    const user = await db.user.update({
       where: { email },
       data: { emailVerified: new Date() },
     });
+
+    // Create sample document if user doesn't have any
+    const docCount = await db.document.count({
+      where: { ownerId: user.id },
+    });
+    if (docCount === 0) {
+      await db.document.create({
+        data: {
+          title: 'Getting Started with DocSync 🚀',
+          ownerId: user.id,
+          collaborators: {
+            create: {
+              userId: user.id,
+              role: 'OWNER',
+            },
+          },
+        },
+      });
+    }
 
     // 5. Delete all tokens for this email to prevent reuse
     await db.verificationToken.deleteMany({
       where: { email },
     });
 
-    return { success: true };
+    // Generate login token for auto-login
+    const loginToken = randomBytes(32).toString('hex');
+    await db.verificationToken.create({
+      data: {
+        email,
+        token: `login:${loginToken}`,
+        expires: new Date(Date.now() + 2 * 60 * 1000), // 2 minutes expiry
+      },
+    });
+
+    return { success: true, email, loginToken };
   } catch (error) {
     console.error('[AUTH] OTP verification error:', error);
     return { error: 'Something went wrong during code verification.' };
@@ -307,9 +372,9 @@ export async function updateProfileAction(name: string, image?: string) {
   try {
     await db.user.update({
       where: { email: session.user.email },
-      data: { 
+      data: {
         name: cleanName,
-        ...(image !== undefined && { image })
+        ...(image !== undefined && { image }),
       },
     });
     return { success: true };

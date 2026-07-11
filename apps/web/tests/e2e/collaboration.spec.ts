@@ -44,8 +44,8 @@ async function signupAndLogin(page: Page, name: string, email: string) {
     await page.goto('/');
   }
 
-  // 4. Wait for the "Create new document" button to be visible to ensure dashboard loaded completely
-  await page.waitForSelector('button:has-text("Create new document")', { timeout: 15000 });
+  // 4. Wait for the "New Document" button to be visible to ensure dashboard loaded completely
+  await page.waitForSelector('button:has-text("New Document")', { timeout: 15000 });
 }
 
 test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
@@ -98,7 +98,7 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
     await signupAndLogin(page1, 'Document Owner', ownerEmail);
 
     // Create a new document on the dashboard
-    await page1.click('button:has-text("Create new document")');
+    await page1.click('button:has-text("New Document")');
     await page1.fill(
       '[placeholder="e.g. Q3 Roadmap Proposal (Leave blank for Untitled)"]',
       'E2E Sync Document',
@@ -209,7 +209,7 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
     page1.on('console', (msg) => console.log(`[PAGE 1 CONSOLE] ${msg.text()}`));
     await signupAndLogin(page1, 'Document Owner', ownerEmail);
 
-    await page1.click('button:has-text("Create new document")');
+    await page1.click('button:has-text("New Document")');
     await page1.fill(
       '[placeholder="e.g. Q3 Roadmap Proposal (Leave blank for Untitled)"]',
       'E2E Viewer Doc',
@@ -275,7 +275,7 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
     const page = await context.newPage();
     await signupAndLogin(page, 'Owner', ownerEmail);
 
-    await page.click('button:has-text("Create new document")');
+    await page.click('button:has-text("New Document")');
     await page.fill(
       '[placeholder="e.g. Q3 Roadmap Proposal (Leave blank for Untitled)"]',
       'IndexedDB Test Doc',
@@ -291,6 +291,9 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
     await page.locator('.ProseMirror').click();
     await page.keyboard.press('Control+End');
     await page.keyboard.type('IndexedDB Offline Change.');
+
+    // Wait for Yjs IndexedDB provider to write updates to database
+    await page.waitForTimeout(1000);
 
     // Reload page while still offline
     await page.reload();
@@ -316,7 +319,7 @@ test.describe('DocSync Collaborative Editor E2E Workspace Tests', () => {
     await signupAndLogin(page, 'Version Admin', ownerEmail);
 
     // Create document
-    await page.click('button:has-text("Create new document")');
+    await page.click('button:has-text("New Document")');
     await page.fill(
       '[placeholder="e.g. Q3 Roadmap Proposal (Leave blank for Untitled)"]',
       'Version History Doc',
