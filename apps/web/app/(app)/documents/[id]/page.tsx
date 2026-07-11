@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/shell/confirm-dialog';
 import { CheckpointLabelDialog } from '@/components/shell/checkpoint-label-dialog';
 import { ShareDialog } from '@/components/shell/share-dialog';
+import { ComingSoonDialog } from '@/components/shell/coming-soon-dialog';
 import {
   Dialog,
   DialogContent,
@@ -396,6 +397,7 @@ function EditorWorkspaceContent({
   const [pendingRestoreSnapshot, setPendingRestoreSnapshot] = useState<Snapshot | null>(null);
   const [isAllVersionsOpen, setIsAllVersionsOpen] = useState(false);
   const [versionsSearchQuery, setVersionsSearchQuery] = useState('');
+  const [comingSoonOpen, setComingSoonOpen] = useState(false);
 
   // Notion Slash Menu state
   const [slashMenu, setSlashMenu] = useState<{
@@ -1009,28 +1011,8 @@ function EditorWorkspaceContent({
           editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
           break;
         case 'image':
-          editor
-            .chain()
-            .focus()
-            .setImage({
-              src: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=60',
-            })
-            .run();
-          break;
         case 'file':
-          editor
-            .chain()
-            .focus()
-            .insertContent(
-              `
-          <p class="file-attachment border border-border p-3 rounded-lg flex items-center gap-2 bg-muted/20 my-2 select-none" contenteditable="false">
-            <svg class="h-4 w-4 text-primary shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-            <span class="font-semibold text-xs text-foreground truncate">attachment.pdf</span>
-            <span class="text-[10px] text-muted-foreground shrink-0">(2.4 MB)</span>
-          </p>
-        `,
-            )
-            .run();
+          setComingSoonOpen(true);
           break;
         case 'bookmark':
           editor
@@ -1056,10 +1038,9 @@ function EditorWorkspaceContent({
           editor.chain().focus().setHorizontalRule().run();
           break;
       }
-
       setSlashMenu(null);
     },
-    [editor, slashMenu, setSlashMenu],
+    [editor, slashMenu, setSlashMenu, setComingSoonOpen],
   );
 
   // Intercept keys when slash menu is open
@@ -2826,6 +2807,8 @@ function EditorWorkspaceContent({
         confirmLabel="Move to Trash"
         onConfirm={handleMoveToTrash}
       />
+
+      <ComingSoonDialog open={comingSoonOpen} onOpenChange={setComingSoonOpen} />
 
       {/* Slide-over sheet/sidebar to view all versions */}
       {isAllVersionsOpen && (

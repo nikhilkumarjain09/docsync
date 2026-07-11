@@ -199,7 +199,23 @@ export default function DashboardPage() {
   const handleContextMenu = (e: React.MouseEvent, doc: DocumentItem) => {
     e.preventDefault();
     e.stopPropagation();
-    setContextMenu({ x: e.clientX, y: e.clientY, docId: doc.id, docTitle: doc.title });
+
+    const menuWidth = 208;
+    const menuHeight = 280;
+
+    let x = e.clientX;
+    let y = e.clientY;
+
+    if (x + menuWidth > window.innerWidth) {
+      x = window.innerWidth - menuWidth - 12;
+    }
+    if (y + menuHeight > window.innerHeight) {
+      y = window.innerHeight - menuHeight - 12;
+    }
+    if (x < 12) x = 12;
+    if (y < 12) y = 12;
+
+    setContextMenu({ x, y, docId: doc.id, docTitle: doc.title });
   };
 
   // ── Helpers ──────────────────────────────────────────────
@@ -476,13 +492,13 @@ export default function DashboardPage() {
                   className="group relative"
                 >
                   <Link href={`/documents/${doc.id}`} className="block">
-                    <div className="border-border bg-card hover:border-primary/20 hover:bg-muted/10 h-full rounded-2xl border p-5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm">
-                      <div className="flex h-full flex-col gap-3">
+                    <div className="border-border bg-card hover:border-primary/20 hover:bg-muted/10 h-[340px] rounded-2xl border p-5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm">
+                      <div className="flex h-full flex-col justify-between gap-3">
                         {/* Title row */}
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex min-w-0 items-start gap-2">
                             <FileText className="text-primary mt-0.5 h-4 w-4 shrink-0" />
-                            <h4 className="group-hover:text-primary text-sm leading-snug font-bold break-words transition-colors">
+                            <h4 className="group-hover:text-primary line-clamp-1 text-sm leading-snug font-bold break-words transition-colors">
                               {doc.title}
                             </h4>
                           </div>
@@ -491,11 +507,50 @@ export default function DashboardPage() {
                           </span>
                         </div>
 
-                        {/* Content preview */}
-                        <div className="bg-muted/30 border-border/40 flex-1 rounded-lg border px-3 py-2">
-                          <p className="text-muted-foreground line-clamp-3 text-[11px] leading-relaxed">
-                            {getContentPreview(doc)}
-                          </p>
+                        {/* Google Docs Style Page Mockup Preview */}
+                        <div className="bg-muted/30 border-border/40 relative flex min-h-[160px] flex-1 flex-col items-center justify-center overflow-hidden rounded-xl border p-3">
+                          <div className="bg-background border-border/40 relative flex h-full w-full flex-col gap-1.5 overflow-hidden rounded-md border p-3 text-left shadow-xs">
+                            {doc.content || doc.headings ? (
+                              <div className="text-muted-foreground/80 space-y-1 font-sans text-[9px] leading-normal">
+                                {doc.content
+                                  ?.split('\n')
+                                  .filter(Boolean)
+                                  .slice(0, 5)
+                                  .map((para, idx) => {
+                                    const isHeading =
+                                      para.startsWith('#') || (para.length < 35 && idx === 0);
+                                    if (isHeading) {
+                                      return (
+                                        <div
+                                          key={idx}
+                                          className="text-foreground border-border/30 line-clamp-1 border-b pb-0.5 text-[10px] font-bold tracking-tight"
+                                        >
+                                          {para.replace(/^#+\s*/, '')}
+                                        </div>
+                                      );
+                                    }
+                                    return (
+                                      <p
+                                        key={idx}
+                                        className="text-muted-foreground/75 line-clamp-2 text-[8px] leading-normal"
+                                      >
+                                        {para}
+                                      </p>
+                                    );
+                                  })}
+                              </div>
+                            ) : (
+                              <div className="w-full space-y-1.5 py-1">
+                                <div className="bg-muted h-1.5 w-3/4 animate-pulse rounded" />
+                                <div className="bg-muted h-1.5 w-full animate-pulse rounded" />
+                                <div className="bg-muted h-1.5 w-5/6 animate-pulse rounded" />
+                                <div className="bg-muted h-1.5 w-2/3 animate-pulse rounded" />
+                              </div>
+                            )}
+
+                            {/* Subtle fade overlay at the bottom to emulate page break/continuation */}
+                            <div className="from-background pointer-events-none absolute right-0 bottom-0 left-0 h-10 bg-gradient-to-t to-transparent" />
+                          </div>
                         </div>
 
                         {/* Footer */}
