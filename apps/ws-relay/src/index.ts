@@ -5,9 +5,14 @@ import * as dotenv from 'dotenv';
 import * as Y from 'yjs';
 import { decode } from 'next-auth/jwt';
 import { db, runWithUserContext } from '@docsync/db';
-import { getDocumentRole, MAX_UPDATE_BYTES, RATE_LIMIT, WsMessageSchema } from '@docsync/shared';
+import {
+  getDocumentRole,
+  MAX_UPDATE_BYTES,
+  RATE_LIMIT,
+  WsMessageSchema,
+  extractDocumentText,
+} from '@docsync/shared';
 
-// Load environment variables
 dotenv.config();
 
 const PORT = parseInt(process.env.PORT || '4444', 10);
@@ -55,8 +60,6 @@ class TokenBucket {
   }
 }
 
-// Map to track active client rooms
-// Room ID (documentId) -> Set of active client connection contexts
 interface ClientContext {
   ws: WebSocket;
   userId: string;
@@ -65,7 +68,6 @@ interface ClientContext {
 }
 const rooms = new Map<string, Set<ClientContext>>();
 
-// Create HTTP server
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('DocSync WS-Relay Server is active.\n');
@@ -85,7 +87,6 @@ console.log(
   `[ws-relay] Security: maxPayload=${MAX_UPDATE_BYTES + 4096}B, rate=${RATE_LIMIT.MAX_TOKENS}tok/${RATE_LIMIT.REFILL_RATE}/s`,
 );
 
-// Handle standard HTTP Upgrade to WebSocket handshake
 server.on('upgrade', async (request, socket, head) => {
   const parsedUrl = url.parse(request.url || '', true);
   const pathname = parsedUrl.pathname || '';
@@ -138,7 +139,6 @@ server.on('upgrade', async (request, socket, head) => {
       return;
     }
 
-    // Verify collaborator role on database
     const role = await getDocumentRole(userId, documentId);
     if (!role) {
       console.log(
@@ -149,7 +149,6 @@ server.on('upgrade', async (request, socket, head) => {
       return;
     }
 
-    // Proceed to upgrade connection
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit('connection', ws, request, { documentId, userId, role });
     });
@@ -160,7 +159,6 @@ server.on('upgrade', async (request, socket, head) => {
   }
 });
 
-// Handle successful WebSocket connection
 wss.on(
   'connection',
   async (
@@ -172,7 +170,6 @@ wss.on(
 
     console.log(`[ws-relay] Client connected: user=${userId}, role=${role}, doc=${documentId}`);
 
-    // Create room context if not existing
     if (!rooms.has(documentId)) {
       rooms.set(documentId, new Set());
     }
@@ -185,10 +182,8 @@ wss.on(
     };
     rooms.get(documentId)!.add(clientCtx);
 
-    // Track rate-limit warnings to avoid log spam
     let rateLimitWarnings = 0;
 
-    // Initialize helper to send JSON messages
     const sendJson = (msg: any) => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify(msg));
@@ -196,8 +191,7 @@ wss.on(
     };
 
     try {
-      // 1. Hydrate the document state from the Postgres log
-      // We run this under user context transaction to enforce Postgres RLS
+      // Execute under user context transaction to enforce Postgres RLS
       const updateLogs = await runWithUserContext(userId, async (tx: any) => {
         return tx.documentUpdateLog.findMany({
           where: { documentId },
@@ -238,11 +232,8 @@ wss.on(
       return;
     }
 
-    // Handle incoming WebSocket messages
     ws.on('message', async (data) => {
-      // ─── Layer 1: Rate limiting ──────────────────────────────────────
-      // Check the token bucket BEFORE parsing. This ensures a flood of
-      // tiny valid messages can't exhaust CPU on JSON.parse/Yjs operations.
+      // 1. Rate limiting check (before parsing to prevent CPU exhaustion attacks)
       const disableRateLimit = process.env.DISABLE_RATE_LIMIT === 'true';
       if (!disableRateLimit && !clientCtx.rateLimiter.consume()) {
         rateLimitWarnings++;
@@ -251,17 +242,17 @@ wss.on(
             `[ws-relay] Rate limiting user=${userId} doc=${documentId} (${rateLimitWarnings} messages throttled)`,
           );
         }
-        return; // Silently drop the message
+        return;
       }
 
-      // ─── Layer 2: Size check (redundant with maxPayload but explicit) ─
+      // 2. Explicit message size check
       const rawSize = typeof data === 'string' ? Buffer.byteLength(data) : (data as Buffer).length;
       if (rawSize > MAX_UPDATE_BYTES + 4096) {
         console.warn(`[ws-relay] Oversized message rejected: ${rawSize} bytes from user=${userId}`);
         return;
       }
 
-      // ─── Layer 3: JSON parse ─────────────────────────────────────────
+      // 3. JSON parse
       let rawMsg: any;
       try {
         rawMsg = JSON.parse(data.toString());
@@ -270,7 +261,7 @@ wss.on(
         return;
       }
 
-      // ─── Layer 4: Schema validation ──────────────────────────────────
+      // 4. Schema validation
       const parseResult = WsMessageSchema.safeParse(rawMsg);
       if (!parseResult.success) {
         console.warn(`[ws-relay] Message schema validation failed: ${parseResult.error.message}`);
@@ -296,10 +287,7 @@ wss.on(
           if (!logId) {
             const updateBytes = Buffer.from(updateBase64, 'base64');
 
-            // ─── Layer 5: Yjs update validation ────────────────────────
-            // Verify the update bytes are a valid Yjs update by applying
-            // them to a throwaway doc. This catches adversarial/corrupt
-            // payloads before they reach the database.
+            // Validate Yjs updates using a temporary document before database write
             const validationDoc = new Y.Doc();
             try {
               Y.applyUpdate(validationDoc, updateBytes);
@@ -312,7 +300,7 @@ wss.on(
             }
             validationDoc.destroy();
 
-            // Persist update in database under sender context to respect RLS
+            // Persist under sender context to enforce database-level RLS
             const savedLog = await runWithUserContext(userId, async (tx: any) => {
               return tx.documentUpdateLog.create({
                 data: {
@@ -325,7 +313,6 @@ wss.on(
             logId = savedLog.id;
           }
 
-          // Broadcast update to all other connected clients in the same room
           const roomClients = rooms.get(documentId);
           if (roomClients) {
             const broadcastMsg = JSON.stringify({
@@ -397,78 +384,25 @@ async function compileAndIndexDocument(documentId: string, userId: string) {
     for (const log of updateLogs) {
       try {
         Y.applyUpdate(doc, new Uint8Array(log.update));
-      } catch (e) {
+      } catch {
         // Skip corrupt log entries
       }
     }
 
     const docStateUpdate = Y.encodeStateAsUpdate(doc);
-    const contentFragment = doc.getXmlFragment('default');
-
-    const parseResult = { headings: [], paragraphs: [], lists: [], tables: [], text: [] };
-    const parseXml = (node: any, res: any) => {
-      if (node instanceof Y.XmlText) {
-        const txt = node.toString().trim();
-        if (txt) res.text.push(txt);
-      } else if (node instanceof Y.XmlElement) {
-        const nodeName = node.nodeName.toLowerCase();
-        const localTextList: string[] = [];
-        for (const child of node.toArray()) {
-          if (child instanceof Y.XmlText) {
-            localTextList.push(child.toString());
-          } else {
-            const subResult = { headings: [], paragraphs: [], lists: [], tables: [], text: [] };
-            parseXml(child, subResult);
-            localTextList.push(...subResult.text);
-            res.headings.push(...subResult.headings);
-            res.paragraphs.push(...subResult.paragraphs);
-            res.lists.push(...subResult.lists);
-            res.tables.push(...subResult.tables);
-          }
-        }
-        const combinedText = localTextList.join('').trim();
-        if (combinedText) {
-          if (nodeName.includes('heading') || nodeName.match(/^h[1-6]$/)) {
-            res.headings.push(combinedText);
-          } else if (nodeName.includes('paragraph') || nodeName === 'p') {
-            res.paragraphs.push(combinedText);
-          } else if (nodeName.includes('listitem') || nodeName === 'li') {
-            res.lists.push(combinedText);
-          } else if (nodeName.includes('tablecell') || nodeName === 'td' || nodeName === 'th') {
-            res.tables.push(combinedText);
-          } else {
-            res.text.push(combinedText);
-          }
-        }
-      } else if (node instanceof Y.XmlFragment) {
-        for (const child of node.toArray()) {
-          parseXml(child, res);
-        }
-      }
-    };
-    parseXml(contentFragment, parseResult);
+    const { headings, paragraphs, lists, tables, content } = extractDocumentText(doc);
     doc.destroy();
-
-    const allText = [
-      ...parseResult.headings,
-      ...parseResult.paragraphs,
-      ...parseResult.lists,
-      ...parseResult.tables,
-      ...parseResult.text,
-    ]
-      .join(' ')
-      .trim();
 
     await runWithUserContext(userId, async (tx: any) => {
       await tx.document.update({
         where: { id: documentId },
         data: {
           latestSnapshot: Buffer.from(docStateUpdate),
-          content: allText || null,
-          headings: parseResult.headings.join(' ') || null,
-          paragraphs: parseResult.paragraphs.join(' ') || null,
-          tables: parseResult.tables.join(' ') || null,
-          lists: parseResult.lists.join(' ') || null,
+          content: content || null,
+          headings: headings || null,
+          paragraphs: paragraphs || null,
+          tables: tables || null,
+          lists: lists || null,
         },
       });
     });
@@ -479,7 +413,6 @@ async function compileAndIndexDocument(documentId: string, userId: string) {
   }
 }
 
-// Boot server
 server.listen(PORT, HOST, () => {
   console.log(`[ws-relay] Server successfully listening at http://${HOST}:${PORT}`);
 });

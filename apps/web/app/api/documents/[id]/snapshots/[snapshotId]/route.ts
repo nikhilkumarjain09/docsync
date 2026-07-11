@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { db, runWithUserContext } from '@docsync/db';
+import { runWithUserContext } from '@docsync/db';
 import { getDocumentRole } from '@docsync/shared';
 
-// GET: Retrieve a specific snapshot's state bytes
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; snapshotId: string }> }
+  { params }: { params: Promise<{ id: string; snapshotId: string }> },
 ) {
   const session = await auth();
   if (!session?.user) {
@@ -35,7 +34,6 @@ export async function GET(
       return NextResponse.json({ error: 'Snapshot not found' }, { status: 404 });
     }
 
-    // Return snapshot details and base64-encoded state
     return NextResponse.json({
       id: snapshot.id,
       documentId: snapshot.documentId,
@@ -43,8 +41,8 @@ export async function GET(
       createdAt: snapshot.createdAt,
       state: Buffer.from(snapshot.state).toString('base64'),
     });
-  } catch (e: any) {
-    console.error('[SnapshotGetRoute] Failed to fetch snapshot details:', e.message);
+  } catch (err) {
+    console.error('[SnapshotGetRoute] Failed to fetch snapshot:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

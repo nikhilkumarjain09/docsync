@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@docsync/db": "workspace:*",
+    "yjs": "^13.6.31",
     "zod": "^3.24.1"
   },
   "devDependencies": {
