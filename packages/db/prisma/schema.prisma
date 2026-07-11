@@ -38,6 +38,15 @@ model Document {
   owner           User                   @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   latestSnapshot  Bytes? // Y.encodeStateAsUpdate bytea checkpoint
   snapshotVersion Int                    @default(0)
+  content         String?                @db.Text
+  headings        String?                @db.Text
+  paragraphs      String?                @db.Text
+  tables          String?                @db.Text
+  lists           String?                @db.Text
+  tags            String?
+  categories      String?
+  keywords        String?
+  department      String?
   deletedAt       DateTime?
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt

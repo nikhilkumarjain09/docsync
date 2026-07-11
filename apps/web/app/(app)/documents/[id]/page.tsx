@@ -775,6 +775,39 @@ function EditorWorkspaceContent({
     };
   }, [documentId]);
 
+  // Scroll and highlight matching query text when navigating from search results
+  useEffect(() => {
+    if (editor && typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      const highlight = url.searchParams.get('highlight');
+      if (highlight) {
+        // Wait a short delay for Yjs data to render in the DOM editor card
+        setTimeout(() => {
+          const editorEl = document.querySelector('.ProseMirror');
+          if (editorEl) {
+            const walk = document.createTreeWalker(editorEl, NodeFilter.SHOW_TEXT);
+            let node;
+            while ((node = walk.nextNode())) {
+              const textContent = node.nodeValue || '';
+              if (textContent.toLowerCase().includes(highlight.toLowerCase())) {
+                const parent = node.parentElement;
+                if (parent) {
+                  parent.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  // Animate transient highlighted background indicator
+                  parent.classList.add('bg-amber-100', 'dark:bg-amber-950/40', 'transition-colors');
+                  setTimeout(() => {
+                    parent.classList.remove('bg-amber-100', 'dark:bg-amber-950/40');
+                  }, 2500);
+                  break;
+                }
+              }
+            }
+          }
+        }, 300);
+      }
+    }
+  }, [editor]);
+
   // ─── Keyboard Shortcuts Setup ─────────────────────────────────────────
   useEffect(() => {
     if (!editor || isViewer) return;

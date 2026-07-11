@@ -372,6 +372,8 @@ wss.on(
         if (roomClients.size === 0) {
           rooms.delete(documentId);
           console.log(`[ws-relay] Cleaned up empty room for document: ${documentId}`);
+          // Trigger background search index update for compiled state
+          compileAndIndexDocument(documentId, userId);
         }
       }
     });
@@ -381,6 +383,101 @@ wss.on(
     });
   },
 );
+
+async function compileAndIndexDocument(documentId: string, userId: string) {
+  try {
+    const updateLogs = await runWithUserContext(userId, async (tx: any) => {
+      return tx.documentUpdateLog.findMany({
+        where: { documentId },
+        orderBy: { createdAt: 'asc' },
+      });
+    });
+
+    const doc = new Y.Doc();
+    for (const log of updateLogs) {
+      try {
+        Y.applyUpdate(doc, new Uint8Array(log.update));
+      } catch (e) {
+        // Skip corrupt log entries
+      }
+    }
+
+    const docStateUpdate = Y.encodeStateAsUpdate(doc);
+    const contentFragment = doc.getXmlFragment('default');
+
+    const parseResult = { headings: [], paragraphs: [], lists: [], tables: [], text: [] };
+    const parseXml = (node: any, res: any) => {
+      if (node instanceof Y.XmlText) {
+        const txt = node.toString().trim();
+        if (txt) res.text.push(txt);
+      } else if (node instanceof Y.XmlElement) {
+        const nodeName = node.nodeName.toLowerCase();
+        const localTextList: string[] = [];
+        for (const child of node.toArray()) {
+          if (child instanceof Y.XmlText) {
+            localTextList.push(child.toString());
+          } else {
+            const subResult = { headings: [], paragraphs: [], lists: [], tables: [], text: [] };
+            parseXml(child, subResult);
+            localTextList.push(...subResult.text);
+            res.headings.push(...subResult.headings);
+            res.paragraphs.push(...subResult.paragraphs);
+            res.lists.push(...subResult.lists);
+            res.tables.push(...subResult.tables);
+          }
+        }
+        const combinedText = localTextList.join('').trim();
+        if (combinedText) {
+          if (nodeName.includes('heading') || nodeName.match(/^h[1-6]$/)) {
+            res.headings.push(combinedText);
+          } else if (nodeName.includes('paragraph') || nodeName === 'p') {
+            res.paragraphs.push(combinedText);
+          } else if (nodeName.includes('listitem') || nodeName === 'li') {
+            res.lists.push(combinedText);
+          } else if (nodeName.includes('tablecell') || nodeName === 'td' || nodeName === 'th') {
+            res.tables.push(combinedText);
+          } else {
+            res.text.push(combinedText);
+          }
+        }
+      } else if (node instanceof Y.XmlFragment) {
+        for (const child of node.toArray()) {
+          parseXml(child, res);
+        }
+      }
+    };
+    parseXml(contentFragment, parseResult);
+    doc.destroy();
+
+    const allText = [
+      ...parseResult.headings,
+      ...parseResult.paragraphs,
+      ...parseResult.lists,
+      ...parseResult.tables,
+      ...parseResult.text,
+    ]
+      .join(' ')
+      .trim();
+
+    await runWithUserContext(userId, async (tx: any) => {
+      await tx.document.update({
+        where: { id: documentId },
+        data: {
+          latestSnapshot: Buffer.from(docStateUpdate),
+          content: allText || null,
+          headings: parseResult.headings.join(' ') || null,
+          paragraphs: parseResult.paragraphs.join(' ') || null,
+          tables: parseResult.tables.join(' ') || null,
+          lists: parseResult.lists.join(' ') || null,
+        },
+      });
+    });
+
+    console.log(`[ws-relay] Successfully auto-indexed compiled document: ${documentId}`);
+  } catch (err: any) {
+    console.error(`[ws-relay] Background indexing failed for document ${documentId}:`, err.message);
+  }
+}
 
 // Boot server
 server.listen(PORT, HOST, () => {

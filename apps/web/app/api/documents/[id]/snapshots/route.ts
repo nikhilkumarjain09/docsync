@@ -124,9 +124,73 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       tempDoc.destroy();
     }
 
-    // 4. Save snapshot row in database
+    // Parse text and headings for full text search indexing
+    const searchDoc = new Y.Doc();
+    const parseResult = { headings: [], paragraphs: [], lists: [], tables: [], text: [] };
+    try {
+      Y.applyUpdate(searchDoc, compressedState);
+      const contentFragment = searchDoc.getXmlFragment('default');
+
+      const parseXml = (node: any, res: any) => {
+        if (node instanceof Y.XmlText) {
+          const txt = node.toString().trim();
+          if (txt) res.text.push(txt);
+        } else if (node instanceof Y.XmlElement) {
+          const nodeName = node.nodeName.toLowerCase();
+          const localTextList: string[] = [];
+          for (const child of node.toArray()) {
+            if (child instanceof Y.XmlText) {
+              localTextList.push(child.toString());
+            } else {
+              const subResult = { headings: [], paragraphs: [], lists: [], tables: [], text: [] };
+              parseXml(child, subResult);
+              localTextList.push(...subResult.text);
+              res.headings.push(...subResult.headings);
+              res.paragraphs.push(...subResult.paragraphs);
+              res.lists.push(...subResult.lists);
+              res.tables.push(...subResult.tables);
+            }
+          }
+          const combinedText = localTextList.join('').trim();
+          if (combinedText) {
+            if (nodeName.includes('heading') || nodeName.match(/^h[1-6]$/)) {
+              res.headings.push(combinedText);
+            } else if (nodeName.includes('paragraph') || nodeName === 'p') {
+              res.paragraphs.push(combinedText);
+            } else if (nodeName.includes('listitem') || nodeName === 'li') {
+              res.lists.push(combinedText);
+            } else if (nodeName.includes('tablecell') || nodeName === 'td' || nodeName === 'th') {
+              res.tables.push(combinedText);
+            } else {
+              res.text.push(combinedText);
+            }
+          }
+        } else if (node instanceof Y.XmlFragment) {
+          for (const child of node.toArray()) {
+            parseXml(child, res);
+          }
+        }
+      };
+      parseXml(contentFragment, parseResult);
+    } catch (parseErr: any) {
+      console.warn(`[SnapshotsRoute] Text extraction failed: ${parseErr.message}`);
+    } finally {
+      searchDoc.destroy();
+    }
+
+    const allText = [
+      ...parseResult.headings,
+      ...parseResult.paragraphs,
+      ...parseResult.lists,
+      ...parseResult.tables,
+      ...parseResult.text,
+    ]
+      .join(' ')
+      .trim();
+
+    // 4. Save snapshot row in database and update document search fields
     const snapshot = await runWithUserContext(userId, async (tx) => {
-      return tx.documentSnapshot.create({
+      const snap = await tx.documentSnapshot.create({
         data: {
           documentId,
           state: Buffer.from(compressedState),
@@ -139,6 +203,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           },
         },
       });
+
+      await tx.document.update({
+        where: { id: documentId },
+        data: {
+          latestSnapshot: Buffer.from(compressedState),
+          snapshotVersion: {
+            increment: 1,
+          },
+          content: allText || null,
+          headings: parseResult.headings.join(' ') || null,
+          paragraphs: parseResult.paragraphs.join(' ') || null,
+          tables: parseResult.tables.join(' ') || null,
+          lists: parseResult.lists.join(' ') || null,
+        },
+      });
+
+      return snap;
     });
 
     console.log(
