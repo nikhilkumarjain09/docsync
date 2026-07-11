@@ -1,15 +1,16 @@
 'use client';
 
 import React, { useState, useEffect, useTransition } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { verifyTokenAction, resendVerification } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, AlertCircle, RefreshCw, Mail, ArrowRight } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Mail, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 
 function VerifyContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const token = searchParams.get('token');
 
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -36,6 +37,9 @@ function VerifyContent() {
         const res = await verifyTokenAction(token);
         if (res.success) {
           setStatus('success');
+          setTimeout(() => {
+            router.push('/login');
+          }, 3000);
         } else {
           setStatus('error');
           setErrorMessage(res.error || 'Verification failed.');
@@ -47,7 +51,7 @@ function VerifyContent() {
     };
 
     verify();
-  }, [token]);
+  }, [token, router]);
 
   // Handle requesting a new token
   const handleResend = (e: React.FormEvent<HTMLFormElement>) => {
@@ -107,8 +111,8 @@ function VerifyContent() {
             </>
           )}
           {status === 'success' && (
-            <p className="text-sm">
-              Your credentials have been verified. Accessing secure workspace...
+            <p className="text-sm font-medium text-emerald-500">
+              Your credentials have been verified. Redirecting to workspace...
             </p>
           )}
           {status === 'error' && (
@@ -175,8 +179,8 @@ function VerifyContent() {
         {status === 'success' && (
           <div className="space-y-4">
             <p className="text-muted-foreground text-center text-sm">
-              You can now sign in using your email address and password to start creating and
-              editing documents.
+              Redirecting you to the sign-in page. If you are not redirected automatically within 3
+              seconds, please click the button below.
             </p>
             <Link href="/login" className="block w-full">
               <Button className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl bg-violet-950 py-6 text-sm font-semibold text-white shadow-md hover:bg-violet-900">

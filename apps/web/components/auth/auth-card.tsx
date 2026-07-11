@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState, useRef, useTransition, useCallback
 import { useRouter } from 'next/navigation';
 import { logIn, signUp, resendVerification, verifyOtpAction } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileText,
@@ -16,6 +17,7 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
+  Loader2,
 } from 'lucide-react';
 
 /** Duration in ms to keep the password visible before auto-hiding (industry standard: 2-5s). */
@@ -75,6 +77,8 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
 
   // Email verification pending state
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [isSignupNavigating, setIsSignupNavigating] = useState(false);
   const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'success' | 'error'>(
     'idle',
   );
@@ -93,17 +97,7 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
   const [otpSuccess, setOtpSuccess] = useState(false);
   const [otpVerifying, setOtpVerifying] = useState(false);
 
-  const otpRef0 = useRef<HTMLInputElement>(null);
-  const otpRef1 = useRef<HTMLInputElement>(null);
-  const otpRef2 = useRef<HTMLInputElement>(null);
-  const otpRef3 = useRef<HTMLInputElement>(null);
-  const otpRef4 = useRef<HTMLInputElement>(null);
-  const otpRef5 = useRef<HTMLInputElement>(null);
-
-  const otpRefs = [otpRef0, otpRef1, otpRef2, otpRef3, otpRef4, otpRef5];
-
-  const handleOtpChange = (index: number, value: string) => {
-    // Only allow single digits
+  const handleOtpChange = (index: number, value: string, container: HTMLDivElement | null) => {
     if (value && !/^\d$/.test(value)) return;
 
     const newDigits = [...otpDigits];
@@ -111,72 +105,96 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
     setOtpDigits(newDigits);
     setOtpError('');
 
-    // Shift focus forward if value is entered
     if (value && index < 5) {
-      otpRefs[index + 1].current?.focus();
+      const inputs = container?.querySelectorAll('input');
+      if (inputs && inputs[index + 1]) {
+        (inputs[index + 1] as HTMLInputElement).focus();
+      }
     }
   };
 
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    // Shift focus backward on Backspace
+  const handleOtpKeyDown = (
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>,
+    container: HTMLDivElement | null,
+  ) => {
     if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      otpRefs[index - 1].current?.focus();
+      const inputs = container?.querySelectorAll('input');
+      if (inputs && inputs[index - 1]) {
+        (inputs[index - 1] as HTMLInputElement).focus();
+      }
     }
   };
 
-  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+  const handleOtpPaste = (
+    e: React.ClipboardEvent<HTMLInputElement>,
+    container: HTMLDivElement | null,
+  ) => {
     e.preventDefault();
     const pasteData = e.clipboardData.getData('text').trim();
     if (/^\d{6}$/.test(pasteData)) {
       const digits = pasteData.split('');
       setOtpDigits(digits);
       setOtpError('');
-      // Focus the last input
-      otpRefs[5].current?.focus();
+      const inputs = container?.querySelectorAll('input');
+      if (inputs && inputs[5]) {
+        (inputs[5] as HTMLInputElement).focus();
+      }
     }
   };
 
-  const handleOtpSubmit = useCallback(async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!pendingVerificationEmail || otpVerifying || otpSuccess) return;
+  const handleOtpSubmit = useCallback(
+    async (e?: React.FormEvent) => {
+      if (e) e.preventDefault();
+      if (!pendingVerificationEmail || otpVerifying || otpSuccess) return;
 
-    const code = otpDigits.join('');
-    if (code.length !== 6) {
-      setOtpError('Please enter all 6 digits of the code.');
-      return;
-    }
-
-    setOtpVerifying(true);
-    setOtpError('');
-
-    try {
-      const res = await verifyOtpAction(pendingVerificationEmail, code);
-      if (res.success) {
-        setOtpSuccess(true);
-        // Clear all inputs
-        setOtpDigits(['', '', '', '', '', '']);
-        setTimeout(() => {
-          router.push('/');
-          router.refresh();
-        }, 1500);
-      } else {
-        setOtpError(res.error || 'Failed to verify code.');
-        // Clear all inputs and focus the first one on error
-        setOtpDigits(['', '', '', '', '', '']);
-        otpRefs[0].current?.focus();
+      const code = otpDigits.join('');
+      if (code.length !== 6) {
+        setOtpError('Please enter all 6 digits of the code.');
+        return;
       }
-    } catch {
-      setOtpError('An unexpected error occurred. Please try again.');
-    } finally {
-      setOtpVerifying(false);
-    }
-  }, [otpDigits, pendingVerificationEmail, otpVerifying, otpSuccess, router, otpRefs]);
+
+      setOtpVerifying(true);
+      setOtpError('');
+
+      try {
+        const res = await verifyOtpAction(pendingVerificationEmail, code);
+        if (res.success) {
+          setOtpSuccess(true);
+          setOtpDigits(['', '', '', '', '', '']);
+          setTimeout(() => {
+            setPendingVerificationEmail(null);
+            setOtpSuccess(false);
+            setIsSignup(false);
+            window.history.pushState(null, '', '/login');
+            toast.success('Email verified successfully! Please log in.');
+          }, 1500);
+        } else {
+          setOtpError(res.error || 'Failed to verify code.');
+          setOtpDigits(['', '', '', '', '', '']);
+          const container = document.getElementById('otp-container');
+          const inputs = container?.querySelectorAll('input');
+          if (inputs && inputs[0]) {
+            (inputs[0] as HTMLInputElement).focus();
+          }
+        }
+      } catch {
+        setOtpError('An unexpected error occurred. Please try again.');
+      } finally {
+        setOtpVerifying(false);
+      }
+    },
+    [otpDigits, pendingVerificationEmail, otpVerifying, otpSuccess],
+  );
 
   // Auto-verify when all 6 digits are filled
   useEffect(() => {
     const isCompleted = otpDigits.every((digit) => digit !== '');
     if (isCompleted && pendingVerificationEmail && !otpSuccess && !otpVerifying) {
-      handleOtpSubmit();
+      const timer = setTimeout(() => {
+        handleOtpSubmit();
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [otpDigits, pendingVerificationEmail, otpSuccess, otpVerifying, handleOtpSubmit]);
 
@@ -245,6 +263,9 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
   // Redirect on successful authentication, or trigger verification pending screen
   useEffect(() => {
     if (loginState?.success) {
+      Promise.resolve().then(() => {
+        setIsNavigating(true);
+      });
       router.push('/');
       router.refresh();
       return;
@@ -252,6 +273,9 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
 
     if (signupState?.success) {
       if (signupState.emailVerified) {
+        Promise.resolve().then(() => {
+          setIsSignupNavigating(true);
+        });
         router.push('/');
         router.refresh();
       } else {
@@ -321,14 +345,14 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
         <AuthGraphic />
       </div>
 
-      <div className="text-xs text-indigo-200/70 space-y-1.5 mt-auto pt-4 border-t border-white/10 w-full text-center sm:text-left">
+      <div className="mt-auto w-full space-y-1.5 border-t border-white/10 pt-4 text-center text-xs text-indigo-200/70 sm:text-left">
         <div className="font-bold text-white/95">Developer: Nikhil Jain</div>
-        <div className="flex items-center gap-2 pt-0.5 justify-center sm:justify-start">
+        <div className="flex items-center justify-center gap-2 pt-0.5 sm:justify-start">
           <a
             href="https://github.com/nikhilkumarjain09"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-white hover:underline flex items-center gap-1 text-white/80"
+            className="flex items-center gap-1 text-white/80 hover:text-white hover:underline"
           >
             <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
@@ -340,7 +364,7 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
             href="https://www.linkedin.com/in/nikhil-kumar-jain-b05909278/"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-white hover:underline flex items-center gap-1 text-white/80"
+            className="flex items-center gap-1 text-white/80 hover:text-white hover:underline"
           >
             <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
               <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
@@ -431,10 +455,17 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
 
         <Button
           type="submit"
-          disabled={loginIsPending}
+          disabled={loginIsPending || isNavigating}
           className="w-full rounded-xl bg-violet-950 py-6 text-sm font-semibold text-white shadow-md transition-all duration-150 hover:bg-violet-900 active:scale-[0.99]"
         >
-          {loginIsPending ? 'Signing In...' : 'Log In'}
+          {loginIsPending || isNavigating ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Signing In...
+            </span>
+          ) : (
+            'Log In'
+          )}
         </Button>
       </form>
 
@@ -538,10 +569,17 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
 
         <Button
           type="submit"
-          disabled={signupIsPending}
+          disabled={signupIsPending || isSignupNavigating}
           className="w-full rounded-xl bg-violet-950 py-6 text-sm font-semibold text-white shadow-md transition-all duration-150 hover:bg-violet-900 active:scale-[0.99]"
         >
-          {signupIsPending ? 'Creating Account...' : 'Sign Up'}
+          {signupIsPending || isSignupNavigating ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Creating Account...
+            </span>
+          ) : (
+            'Sign Up'
+          )}
         </Button>
       </form>
 
@@ -600,7 +638,7 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: [1, 1.18, 1], opacity: [0.1, 0.25, 0.1] }}
-              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+              transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
               className="absolute inset-0 rounded-full bg-emerald-500"
             />
             {/* Soft backdrop fill ring */}
@@ -608,10 +646,16 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 0.1 }}
-              className="absolute inset-2 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20"
+              className="absolute inset-2 flex items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10"
             />
             {/* Self-drawing SVG path checkmark */}
-            <svg className="h-9 w-9 text-emerald-500 z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
+            <svg
+              className="z-10 h-9 w-9 text-emerald-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={3.5}
+            >
               <motion.path
                 initial={{ pathLength: 0 }}
                 animate={{ pathLength: 1 }}
@@ -629,7 +673,9 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
             transition={{ delay: 0.55, duration: 0.25 }}
             className="mt-6 space-y-2"
           >
-            <h3 className="text-foreground text-2xl font-bold tracking-tight">Verification Successful!</h3>
+            <h3 className="text-foreground text-2xl font-bold tracking-tight">
+              Verification Successful!
+            </h3>
             <p className="text-muted-foreground text-sm">
               Your account is active. Redirecting you to DocSync...
             </p>
@@ -652,32 +698,44 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
         </div>
 
         <div className="space-y-2">
-          <h3 className="text-foreground text-2xl font-bold tracking-tight">Security Verification</h3>
+          <h3 className="text-foreground text-2xl font-bold tracking-tight">
+            Security Verification
+          </h3>
           <p className="text-muted-foreground text-sm leading-relaxed">
             An authorization code has been dispatched to <br />
             <strong className="text-foreground font-semibold text-wrap break-all">
               {pendingVerificationEmail}
-            </strong>. <br />
+            </strong>
+            . <br />
             Please enter the 6-digit code below to authenticate your identity. <br />
-            <strong className="text-foreground font-bold block mt-1">Be sure to check your spam folder if you do not receive it shortly.</strong>
+            <strong className="text-foreground mt-1 block font-bold">
+              Be sure to check your spam folder if you do not receive it shortly.
+            </strong>
           </p>
         </div>
 
         {/* OTP Input Code Boxes */}
         <form onSubmit={handleOtpSubmit} className="space-y-4">
-          <div className="flex justify-center gap-2.5">
+          <div id="otp-container" className="flex justify-center gap-2.5">
             {otpDigits.map((digit, index) => (
               <input
                 key={index}
-                ref={otpRefs[index]}
                 type="text"
                 maxLength={1}
                 inputMode="numeric"
                 pattern="[0-9]*"
                 value={digit}
-                onChange={(e) => handleOtpChange(index, e.target.value)}
-                onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                onPaste={index === 0 ? handleOtpPaste : undefined}
+                onChange={(e) =>
+                  handleOtpChange(
+                    index,
+                    e.target.value,
+                    e.currentTarget.parentElement as HTMLDivElement,
+                  )
+                }
+                onKeyDown={(e) =>
+                  handleOtpKeyDown(index, e, e.currentTarget.parentElement as HTMLDivElement)
+                }
+                onPaste={(e) => handleOtpPaste(e, e.currentTarget.parentElement as HTMLDivElement)}
                 disabled={otpVerifying || otpSuccess}
                 className="border-input bg-background focus:border-primary focus:ring-primary/20 h-12 w-10 rounded-xl border text-center text-lg font-bold transition-all outline-none focus:ring-2 disabled:opacity-50 sm:h-14 sm:w-12"
               />

@@ -62,7 +62,7 @@ export function AppSidebar({
   isResizing: boolean;
   setIsResizing: (r: boolean) => void;
 }) {
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -368,8 +368,33 @@ export function AppSidebar({
     }
   };
 
-  if (!session?.user) return null;
-  const userId = session.user.id;
+  const userId = session?.user?.id;
+
+  if (sessionStatus === 'loading') {
+    return (
+      <div
+        style={{
+          width: isCollapsed ? 0 : width,
+          transition: isResizing ? 'none' : 'width 250ms cubic-bezier(0.4, 0, 0.2, 1)',
+        }}
+        className={`border-border bg-sidebar text-sidebar-foreground group/sidebar relative flex h-full flex-col border-r select-none ${
+          isCollapsed ? 'border-r-0' : ''
+        } overflow-hidden`}
+      >
+        <div className="border-sidebar-border flex shrink-0 items-center justify-between border-b px-4 py-3">
+          <div className="flex items-center gap-2">
+            <div className="h-6 w-6 animate-pulse rounded-lg bg-violet-950/20" />
+            <div className="bg-muted h-4 w-20 animate-pulse rounded" />
+          </div>
+        </div>
+        <div className="flex-1 space-y-4 p-4">
+          <SidebarSkeleton />
+        </div>
+      </div>
+    );
+  }
+
+  if (!session?.user || !userId) return null;
 
   const privateDocs = documents.filter((doc) => doc.ownerId === userId);
   const sharedDocs = documents.filter((doc) => doc.ownerId !== userId);
