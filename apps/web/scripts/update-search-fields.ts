@@ -1,10 +1,5 @@
 import * as Y from 'yjs';
 import { db } from '@docsync/db';
-import * as dotenv from 'dotenv';
-import * as path from 'path';
-
-// Load environment variables from the root .env
-dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 function parseXmlContent(
   node: Y.XmlText | Y.XmlElement | Y.XmlFragment,
