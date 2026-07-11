@@ -21,8 +21,9 @@ try {
       }
     }
   }
-} catch (e: any) {
-  console.warn('Failed to parse .env file:', e.message);
+} catch (e) {
+  const msg = e instanceof Error ? e.message : String(e);
+  console.warn('Failed to parse .env file:', msg);
 }
 
 export default defineConfig({
@@ -30,6 +31,11 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     include: ['tests/**/*.test.ts'],
+    server: {
+      deps: {
+        inline: [/@docsync/],
+      },
+    },
   },
   resolve: {
     alias: {

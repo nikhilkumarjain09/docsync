@@ -48,3 +48,19 @@ cd server/ws-relay && npm run dev  # WS relay on :4444
 /components          → React components
 /tests               → Vitest + Playwright tests
 ```
+
+## Engineering Highlights & Scale Narrative
+
+### 1. Document State-Size Growth & Compaction
+
+As collaborative documents accumulate edit history over years, the raw Yjs update log can grow indefinitely, causing overhead during initial load. DocSync handles this through a **Compaction & Snapshotting** mechanism:
+
+- When a user saves a version, the server reconstructs the Y.Doc state, extracts full-text headings/content, and collapses all previous update logs into a single compressed state vector stored in the `DocumentSnapshot` database table.
+- The `latestSnapshot` field in the `Document` table stores the latest consolidated state. When new clients connect or sync, the system can serve the compacted snapshot rather than replaying millions of individual fine-grained keys from the update logs, effectively bounding transport size and memory overhead.
+
+### 2. Architectural Two-Service Split
+
+DocSync is split into two independent services:
+
+- **Next.js Web Frontend** (deployed to Vercel/Serverless): Handles page routing, Auth.js session cookies, metadata API endpoints, AI actions, and static dashboards. This scales horizontally and benefits from serverless edge latency.
+- **Stateful WebSocket Relay** (deployed to Fly.io/Railway/VM): WebSocket connections require long-lived TCP connections and stateful, persistent in-memory Yjs sync maps. Serverless functions are unfit for WebSockets due to execution timeouts and lack of shared memory. A dedicated VM runner manages connection states, authenticates sockets transitively via JWT cookies, and writes batched update streams back to the database.

@@ -1,17 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as Y from 'yjs';
 import { SyncPayloadSchema, MAX_UPDATE_BASE64_LENGTH, MAX_UPDATES_PER_SYNC } from '@docsync/shared';
-import { getDocumentRole } from '@docsync/shared';
+import { getDocumentRole } from '../../../../packages/shared/src/authorize';
 import { db } from '@docsync/db';
 
 // Mock the Prisma DB client before importing getDocumentRole which depends on it
 vi.mock('@docsync/db', () => {
-  return {
-    db: {
-      documentCollaborator: {
-        findUnique: vi.fn(),
-      },
+  const localMockDb = {
+    documentCollaborator: {
+      findUnique: vi.fn(),
     },
+  };
+  return {
+    db: localMockDb,
+    runWithUserContext: vi.fn(async (userId: string, fn: (tx: unknown) => Promise<unknown>) => {
+      return fn(localMockDb);
+    }),
   };
 });
 
@@ -80,7 +84,7 @@ describe('DocSync Core Unit Tests', () => {
     // Assert 2: The entire state vectors are completely byte-identical
     const stateVectorA = Y.encodeStateAsUpdate(docA);
     const stateVectorB = Y.encodeStateAsUpdate(docB);
-    
+
     expect(Buffer.from(stateVectorA).equals(Buffer.from(stateVectorB))).toBe(true);
   });
 
@@ -121,7 +125,7 @@ describe('DocSync Core Unit Tests', () => {
     const doc = new Y.Doc();
     const text = doc.getText('default');
     text.insert(0, 'Version 1');
-    
+
     // Capture snapshot state representing "Version 1"
     const snapshotBytes = Y.encodeStateAsUpdate(doc);
 
@@ -133,7 +137,7 @@ describe('DocSync Core Unit Tests', () => {
     // The collaborator branched off "Version 1 - Revised" and inserted "[Concurrent]" at the end
     const peerDoc = new Y.Doc();
     Y.applyUpdate(peerDoc, Y.encodeStateAsUpdate(doc));
-    
+
     // Peer performs concurrent insert
     let peerUpdate: Uint8Array | null = null;
     peerDoc.on('update', (update) => {
@@ -149,11 +153,6 @@ describe('DocSync Core Unit Tests', () => {
     const targetText = targetDoc.getText('default').toString(); // "Version 1"
     targetDoc.destroy();
 
-    let restoreUpdateBytes: Uint8Array | null = null;
-    doc.on('update', (update) => {
-      restoreUpdateBytes = update;
-    });
-
     doc.transact(() => {
       text.delete(0, text.length);
       text.insert(0, targetText);
@@ -164,7 +163,7 @@ describe('DocSync Core Unit Tests', () => {
     // 5. Apply the peer's concurrent edit to the restored document
     Y.applyUpdate(doc, peerUpdate!);
 
-    // Assert: The restore replaced the content to "Version 1", but because it was done 
+    // Assert: The restore replaced the content to "Version 1", but because it was done
     // as a forward edit, the peer's concurrent insert is preserved and merged correctly!
     const finalMergedText = text.toString();
     expect(finalMergedText).toContain('Version 1');
@@ -207,7 +206,7 @@ describe('DocSync Core Unit Tests', () => {
   // 5. Role Authorization Helper Test
   // ─────────────────────────────────────────────────────────────────────────────
   it('PROVES AUTHORIZATION HELPER: getDocumentRole resolves roles correctly for all cases', async () => {
-    const mockFindUnique = db.documentCollaborator.findUnique as any;
+    const mockFindUnique = vi.mocked(db.documentCollaborator.findUnique);
 
     // Case 1: Owner role
     mockFindUnique.mockResolvedValueOnce({ role: 'OWNER' });
