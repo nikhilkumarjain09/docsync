@@ -49,8 +49,8 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/docsync
 
-      - name: Push database schema
-        run: pnpm --filter @docsync/db run db:push
+      - name: Deploy database migrations
+        run: pnpm --filter @docsync/db exec prisma migrate deploy
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/docsync
 
