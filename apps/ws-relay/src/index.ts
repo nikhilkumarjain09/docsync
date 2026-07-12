@@ -4,7 +4,7 @@ import * as url from 'url';
 import * as dotenv from 'dotenv';
 import * as Y from 'yjs';
 import { decode } from 'next-auth/jwt';
-import { db, runWithUserContext } from '@docsync/db';
+import { runWithUserContext } from '@docsync/db';
 import {
   getDocumentRole,
   MAX_UPDATE_BYTES,
@@ -119,14 +119,14 @@ server.on('upgrade', async (request, socket, head) => {
         secret: AUTH_SECRET,
         salt: 'authjs.session-token',
       });
-    } catch (err) {
+    } catch {
       try {
         decoded = await decode({
           token,
           secret: AUTH_SECRET,
           salt: '__Secure-authjs.session-token',
         });
-      } catch (err2) {
+      } catch {
         // Handled below
       }
     }
@@ -256,7 +256,7 @@ wss.on(
       let rawMsg: any;
       try {
         rawMsg = JSON.parse(data.toString());
-      } catch (e) {
+      } catch {
         console.warn('[ws-relay] Invalid message format received.');
         return;
       }
