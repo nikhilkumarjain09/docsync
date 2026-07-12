@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState, useEffect, useState, useRef, useTransition, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+
 import { logIn, signUp, resendVerification, verifyOtpAction } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -71,7 +71,6 @@ interface AuthCardProps {
 }
 
 export function AuthCard({ initialIsSignup }: AuthCardProps) {
-  const router = useRouter();
   const [isSignup, setIsSignup] = useState(initialIsSignup);
   const [isMobile, setIsMobile] = useState(false);
   const [announcement, setAnnouncement] = useState('');
@@ -174,7 +173,7 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
               callbackUrl: '/',
             });
             if (signInRes?.ok) {
-              window.location.href = '/';
+              window.location.replace('/');
             } else {
               toast.error('Automatic sign-in failed. Please log in manually.');
               setTimeout(() => {
@@ -290,8 +289,7 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
       Promise.resolve().then(() => {
         setIsNavigating(true);
       });
-      router.push('/');
-      router.refresh();
+      window.location.replace('/');
       return;
     }
 
@@ -300,15 +298,14 @@ export function AuthCard({ initialIsSignup }: AuthCardProps) {
         Promise.resolve().then(() => {
           setIsSignupNavigating(true);
         });
-        router.push('/');
-        router.refresh();
+        window.location.replace('/');
       } else {
         Promise.resolve().then(() => {
           setPendingVerificationEmail(signupState.email || '');
         });
       }
     }
-  }, [loginState, signupState, router]);
+  }, [loginState, signupState]);
 
   // Intercept unverified logins to redirect to verification pending screen
   useEffect(() => {

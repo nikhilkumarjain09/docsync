@@ -48,7 +48,7 @@ function VerifyContent() {
               callbackUrl: '/',
             });
             if (signInRes?.ok) {
-              window.location.href = '/';
+              window.location.replace('/');
             } else {
               router.push('/login');
             }
