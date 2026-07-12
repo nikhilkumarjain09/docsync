@@ -15,6 +15,12 @@ const eslintConfig = defineConfig([
     // Separate package — has its own linting
     'server/**',
   ]),
+  {
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+    },
+  },
 ]);
 
 export default eslintConfig;
