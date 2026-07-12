@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { POST } from '@/app/api/documents/[id]/sync/route';
 import { auth } from '@/auth';
@@ -78,8 +78,8 @@ describe('Sync API Route Integration Tests', () => {
     const superuserUrl =
       process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/docsync';
     const testDbUrl = superuserUrl.replace(
-      /postgresql:\/\/([^:]+):([^@]+)@/,
-      'postgresql://docsync_app_test:docsync_app_test@',
+      /^(postgres(?:ql)?:\/\/)[^@]+@/,
+      '$1docsync_app_test:docsync_app_test@',
     );
     testDb = new PrismaClient({ datasources: { db: { url: testDbUrl } } });
   });
