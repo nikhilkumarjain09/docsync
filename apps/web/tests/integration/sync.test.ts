@@ -67,11 +67,15 @@ describe('Sync API Route Integration Tests', () => {
       END
       $$;
     `);
+    await db.$executeRawUnsafe(`GRANT USAGE ON SCHEMA public TO docsync_app_test;`);
     await db.$executeRawUnsafe(
       `GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO docsync_app_test;`,
     );
     await db.$executeRawUnsafe(
       `GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO docsync_app_test;`,
+    );
+    await db.$executeRawUnsafe(
+      `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO docsync_app_test;`,
     );
 
     // Construct a restricted Prisma client to enforce RLS (superuser bypasses RLS)
